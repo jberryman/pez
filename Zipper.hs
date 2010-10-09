@@ -22,9 +22,7 @@ module Zipper (
       -- maybe include these:
     , stepUp    -- :: Zipper a b -> Maybe (Zipper a a)
     , dropTo    -- like moveTo, but doesn't save history?
-    , level     -- returns our depth in tree, useful because we might
-                -- use Maybe for Type casting AND for trying to moveUp
-                -- on head
+    , atTop     -- returns True if at top (can't moveUp)
 -}
     ) where
 
@@ -56,7 +54,10 @@ import Prelude hiding ((.), id) -- take these from Control.Category
  -      the child node set to undefined. Any performance difference?
  -}
 
-
+{- TODO:
+ - revert the shit changes I made
+ - use mapThrist to just extract a Saved thrist
+ -}
 
     -------------------------
     -- TYPES: the real heros
@@ -69,6 +70,7 @@ import Prelude hiding ((.), id) -- take these from Control.Category
 data HistPair b a where 
     H :: (Typeable a, Typeable b)=> (a :-> b) -> (b -> a) -> HistPair b a
 
+
 type ZipperStack b a = Thrist HistPair b a
 
 data Zipper a b = Z { stack  :: ZipperStack b a,
@@ -79,10 +81,13 @@ data Zipper a b = Z { stack  :: ZipperStack b a,
 $(mkLabels [''Zipper])
 
 
+data SavedElement b a where 
+    SE :: (Typeable a, Typeable b)=> (a :-> b) -> SavedElement b a
+
  -- | stores the path used to return to the same location in a data structure
  -- as the one we just exited. You can also extract a lens from a Saved that
  -- points to that location:
-data Saved a b = S (Thrist (:->) a b)
+newtype Saved b a = S (Thrist SavedElement b a)
 
 
 
