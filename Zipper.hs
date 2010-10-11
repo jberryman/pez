@@ -12,18 +12,19 @@ module Zipper (
     , zipper 
     , close
     , closeSaving
-{-    
 
     , Saved -- stores our lens
     , save  --extracts a Saved from zipper
     , savedLens  -- extracts the Lens from Saved wrapper
     , restore    -- re-enters a data type catching any errors in a cool way
 
-      -- maybe include these:
+    , atTop     -- returns True if at top (can't moveUp)
+
+    {-  -- maybe include these:
     , stepUp    -- :: Zipper a b -> Maybe (Zipper a a)
     , dropTo    -- like moveTo, but doesn't save history?
-    , atTop     -- returns True if at top (can't moveUp)
--}
+    -}
+
     ) where
 
 
@@ -55,7 +56,6 @@ import Prelude hiding ((.), id) -- take these from Control.Category
  -}
 
 {- TODO:
- - revert the shit changes I made
  - use mapThrist to just extract a Saved thrist
  -}
 
@@ -87,7 +87,7 @@ data SavedElement b a where
  -- | stores the path used to return to the same location in a data structure
  -- as the one we just exited. You can also extract a lens from a Saved that
  -- points to that location:
-newtype Saved b a = S (Thrist SavedElement b a)
+newtype Saved a b = S (Thrist SavedElement b a)
 
 
 
@@ -120,10 +120,38 @@ close :: Zipper a b -> a
 close = snd . closeSaving
 
 
+
+
+    ------------------------------
+    -- ADVANCED ZIPPER FUNCTIONS:
+    ------------------------------
+
+
 closeSaving :: Zipper a b -> (Saved a b, a)
 --closeSaving (Z lThr cThr b) = (S lThr, compStack cThr b)
 closeSaving = undefined
 
+
+
+save :: Zipper a b -> Saved a b
+save = fst . closeSaving
+
+savedLens :: Saved a b -> (a :-> b)
+savedLens s = undefined
+
+restore :: Saved a b -> a -> Maybe (Zipper a b)
+restore s a = undefined
+
+
+atTop :: Zipper a b -> Bool
+atTop (Z Nil _) = True
+atTop _         = False
+
+{-
+-- maybe include these:
+stepUp :: Zipper a b -> Maybe (Zipper a a)
+dropTo :: (Typeable b, Typeable c)=> (b :-> c) -> Zipper a b -> Maybe (Zipper a c)
+-}
 
 
 
