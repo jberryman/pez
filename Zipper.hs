@@ -41,6 +41,9 @@ import Data.Thrist
 import Control.Category         
 import Prelude hiding ((.), id) -- take these from Control.Category
 
+ -- for convenient tuple functions:
+import Control.Arrow
+
 
 {- 
  - DESCRIPTION:
@@ -55,9 +58,6 @@ import Prelude hiding ((.), id) -- take these from Control.Category
  -      the child node set to undefined. Any performance difference?
  -}
 
-{- TODO:
- - use mapThrist to just extract a Saved thrist
- -}
 
     -------------------------
     -- TYPES: the real heros
@@ -77,23 +77,27 @@ data Zipper a b = Z { stack  :: ZipperStack b a,
                       _focus :: b                                  
                     } deriving (Typeable)
     
- -- generate the lens we export for 'focus' using fclabel's TH:
-$(mkLabels [''Zipper])
 
 
-data SavedElement b a where 
-    SE :: (Typeable a, Typeable b)=> (a :-> b) -> SavedElement b a
+data SavedLens b a where 
+    SL :: (Typeable a, Typeable b)=> (a :-> b) -> SavedLens b a
+
+type LensStack b a = Thrist SavedLens b a
 
  -- | stores the path used to return to the same location in a data structure
  -- as the one we just exited. You can also extract a lens from a Saved that
  -- points to that location:
-newtype Saved a b = S (Thrist SavedElement b a)
+newtype Saved a b = S { savedLenses :: LensStack b a }
 
 
 
     ---------------------------
     -- Basic Zipper Functions:
     ---------------------------
+ 
+ 
+ -- generate the lens we export for 'focus' using fclabel's TH:
+$(mkLabels [''Zipper])
 
 
 -- TODO: - make below use some error handling for Maybe:
@@ -101,15 +105,15 @@ newtype Saved a b = S (Thrist SavedElement b a)
  -- | Move down the structure to the label specified. Return Nothing if the
  -- label is not valid for the focus's constructor:
 moveTo :: (Typeable b, Typeable c)=> (b :-> c) -> Zipper a b -> Maybe (Zipper a c)
-moveTo l (Z stck b) = let f = b `missing` l 
+moveTo l (Z stck b) = let h = H l (b `missing` l) 
                           c = getL l b      
-                       in Just $ Z (Cons (H l f) stck) c
+                       in Just $ Z (Cons h stck) c
 
  -- | Move up a level as long as the type of the parent is what the programmer
  -- is expecting and we aren't already at the top. Otherwise return Nothing.
 moveUp :: (Typeable c, Typeable b)=> Zipper a c -> Maybe (Zipper a b)
-moveUp (Z Nil _)                 = Nothing --already at top
 moveUp (Z (Cons (H _ f) stck) c) = gcast $ Z stck $ f c
+moveUp _ = Nothing  
 
 
 zipper :: (Typeable a)=> a -> Zipper a a
@@ -128,16 +132,19 @@ close = snd . closeSaving
 
 
 closeSaving :: Zipper a b -> (Saved a b, a)
---closeSaving (Z lThr cThr b) = (S lThr, compStack cThr b)
-closeSaving = undefined
+closeSaving (Z stck b) = (S lnss, a)
+    where (lnss, fs) = unzipThrist stck 
+          a          = compStack fs b
 
 
 
 save :: Zipper a b -> Saved a b
 save = fst . closeSaving
 
-savedLens :: Saved a b -> (a :-> b)
-savedLens s = undefined
+savedLens :: (Typeable a, Typeable b)=> Saved a b -> (a :-> b)
+savedLens = getLens . foldThrist compLenses (SL id) . savedLenses
+    where compLenses (SL l) (SL l') = SL (l . l')
+          getLens (SL l) = l
 
 restore :: Saved a b -> a -> Maybe (Zipper a b)
 restore s a = undefined
@@ -170,3 +177,8 @@ missing a l = flip (setL l) a
  -- Here 'cat' will be either (->) or (:->):
 compStack :: (Category cat)=> Thrist cat b a -> cat b a
 compStack = foldThrist (flip(.)) id
+
+ -- seperates the paired Thrist levels into thrists representing the lenses
+ -- and the one-hole continuations seperately:
+unzipThrist :: ZipperStack b a -> (LensStack b a , Thrist (->) b a)
+unzipThrist = mapThrist (\(H l _)-> SL l) &&& mapThrist (\(H _ f)->f)
