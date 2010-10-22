@@ -97,7 +97,7 @@ newtype Saved a b = S { savedLenses :: LensStack b a }
  
  
  -- generate the lens we export for 'focus' using fclabel's TH:
-$(mkLabels [''Zipper])
+$(mkLabelsNoTypes [''Zipper])
 
 
 -- TODO: - make below use some error handling for Maybe:
@@ -113,7 +113,7 @@ moveTo l (Z stck b) = let h = H l (b `missing` l)
  -- is expecting and we aren't already at the top. Otherwise return Nothing.
 moveUp :: (Typeable c, Typeable b)=> Zipper a c -> Maybe (Zipper a b)
 moveUp (Z (Cons (H _ f) stck) c) = gcast $ Z stck $ f c
-moveUp _ = Nothing  
+moveUp _                         = Nothing  
 
 
 zipper :: (Typeable a)=> a -> Zipper a a
@@ -146,9 +146,22 @@ savedLens = getLens . foldThrist compLenses (SL id) . savedLenses
     where compLenses (SL l) (SL l') = SL (l . l')
           getLens (SL l) = l
 
-restore :: Saved a b -> a -> Maybe (Zipper a b)
-restore s a = undefined
 
+ --TODO: add error handling in Maybe monad for when we hit a bad construcator
+restore :: (Typeable a, Typeable b)=> Saved a b -> a -> Maybe (Zipper a b)
+--restore = undefined
+restore s = Just . uncurry Z . restore' (savedLenses s)
+     where restore' :: LensStack b a -> a -> (ZipperStack b a, b)
+           restore' Nil              b = (Nil, b)  -- TODO: here is the problem: a vs b. try casting?
+           restore' (Cons (SL l) ls) a = 
+              first (Cons $ H l $ a `missing` l) (restore' ls $ getL l a)
+{-
+restore s = Just . uncurry Z . restore' s
+     where restore' :: Saved a b -> a -> (ZipperStack b a, b)
+           restore' (S Nil)              b = (Nil, b)
+           restore' (S (Cons (SL l) ls)) a = 
+              first (Cons $ H l $ a `missing` l) (restore' (S ls) $ getL l a)
+-}
 
 atTop :: Zipper a b -> Bool
 atTop (Z Nil _) = True
@@ -168,7 +181,7 @@ dropTo :: (Typeable b, Typeable c)=> (b :-> c) -> Zipper a b -> Maybe (Zipper a 
 
 
  -- make a hole in a type corresponding to the passed lens, forming a section:
- --  MAYBE GIVE THE GC SOME HINTS HERE?:
+ --  TODO: MAYBE GIVE THE GC SOME HINTS HERE?:
 missing :: a -> (a :-> b) -> (b -> a)
 missing a l = flip (setL l) a
 
