@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeOperators, TemplateHaskell, GADTs, DeriveDataTypeable #-}
+{-# LANGUAGE TypeOperators, TemplateHaskell, GADTs, DeriveDataTypeable, RankNTypes #-}
 module Zipper (
     -- * Export Typeable and fclabels, for convenience:
       module Data.Record.Label
@@ -41,8 +41,6 @@ import Data.Thrist
 import Control.Category         
 import Prelude hiding ((.), id) -- take these from Control.Category
 
- -- for convenient tuple functions:
-import Control.Arrow
 
 
 {- 
@@ -70,7 +68,6 @@ import Control.Arrow
 data HistPair b a where 
     H :: (Typeable a, Typeable b)=> (a :-> b) -> (b -> a) -> HistPair b a
 
-
 type ZipperStack b a = Thrist HistPair b a
 
 data Zipper a b = Z { stack  :: ZipperStack b a,
@@ -78,16 +75,10 @@ data Zipper a b = Z { stack  :: ZipperStack b a,
                     } deriving (Typeable)
     
 
-
-data SavedLens b a where 
-    SL :: (Typeable a, Typeable b)=> (a :-> b) -> SavedLens b a
-
-type LensStack b a = Thrist SavedLens b a
-
  -- | stores the path used to return to the same location in a data structure
  -- as the one we just exited. You can also extract a lens from a Saved that
  -- points to that location:
-newtype Saved a b = S { savedLenses :: LensStack b a }
+newtype Saved a b = S { savedLenses :: Thrist (:->) a b }
 
 
 
@@ -132,9 +123,9 @@ close = snd . closeSaving
 
 
 closeSaving :: Zipper a b -> (Saved a b, a)
-closeSaving (Z stck b) = (S lnss, a)
-    where (lnss, fs) = unzipThrist stck 
-          a          = compStack fs b
+closeSaving (Z stck b) = (S ls, a)
+    where ls = getReverseLensStack stck
+          a  = compStack (getConts stck) b
 
 
 
@@ -142,19 +133,29 @@ save :: Zipper a b -> Saved a b
 save = fst . closeSaving
 
 savedLens :: (Typeable a, Typeable b)=> Saved a b -> (a :-> b)
-savedLens = getLens . foldThrist compLenses (SL id) . savedLenses
-    where compLenses (SL l) (SL l') = SL (l . l')
-          getLens (SL l) = l
+savedLens = compStack . savedLenses
 
 
- --TODO: add error handling in Maybe monad for when we hit a bad construcator
-restore :: (Typeable a, Typeable b)=> Saved a b -> a -> Maybe (Zipper a b)
---restore = undefined
+ --TODO: add error handling in Maybe monad for when we hit a bad constructor
+restore :: (Typeable a, Typeable b)=> a -> Saved a b -> Maybe (Zipper a b)
+restore a = foldMThrist res (Z Nil a) . savedLenses
+    where res = undefined
+
+{-
+restore s = Just . restore' Nil (savedLenses s)
+     where restore' :: (Typeable a, Typeable b, Typeable c)=>ZipperStack c b -> Thrist (:->) a c -> a -> Zipper a c
+           restore' zs Nil         b = Z zs b
+           restore' zs (Cons l ls) a = 
+               let h = H l (a `missing` l)
+                in restore' (Cons h zs) ls (getL l a)
+-}
+{-
 restore s = Just . uncurry Z . restore' (savedLenses s)
      where restore' :: LensStack b a -> a -> (ZipperStack b a, b)
            restore' Nil              b = (Nil, b)  -- TODO: here is the problem: a vs b. try casting?
            restore' (Cons (SL l) ls) a = 
               first (Cons $ H l $ a `missing` l) (restore' ls $ getL l a)
+-}
 {-
 restore s = Just . uncurry Z . restore' s
      where restore' :: Saved a b -> a -> (ZipperStack b a, b)
@@ -185,13 +186,58 @@ dropTo :: (Typeable b, Typeable c)=> (b :-> c) -> Zipper a b -> Maybe (Zipper a 
 missing :: a -> (a :-> b) -> (b -> a)
 missing a l = flip (setL l) a
 
-
  -- fold a thrist into a single category by composing the stack with (.)
  -- Here 'cat' will be either (->) or (:->):
 compStack :: (Category cat)=> Thrist cat b a -> cat b a
-compStack = foldThrist (flip(.)) id
+compStack = foldrThrist (flip(.)) id
 
  -- seperates the paired Thrist levels into thrists representing the lenses
  -- and the one-hole continuations seperately:
-unzipThrist :: ZipperStack b a -> (LensStack b a , Thrist (->) b a)
-unzipThrist = mapThrist (\(H l _)-> SL l) &&& mapThrist (\(H _ f)->f)
+getConts :: ZipperStack b a -> Thrist (->) b a
+getConts = mapThrist (\(H _ f)->f)
+
+ -- Takes the zipper stack and extracts each lens segment, and recomposes
+ -- them in reversed order, forming a lens from top to bottom of a data 
+ -- structure:
+getReverseLensStack :: ZipperStack b a -> Thrist (:->) a b
+getReverseLensStack = unflip . foldlThrist rev (Flipped Nil)
+    where rev (Flipped t) (H l _) = Flipped $ Cons l t
+
+
+
+
+-----------------------------------------------------------------
+-----------------------------------------------------------------
+-- TO BE DEFINED IN NEW VERSION OF Data.Thrist:
+--    when it is upgraded, we should remove these definitions and
+--    also remove the RankNTypes extension from this file AND the
+--    cabal file:
+
+foldrThrist :: (forall i j . (i ~> j) -> (j +> c) -> (i +> c)) 
+               -> (b +> c) 
+               -> Thrist (~>) a b 
+               -> (a +> c)
+foldrThrist _ v Nil        = v
+foldrThrist f v (Cons h t) = h `f` (foldrThrist f v t)
+
+ -- THIS MAY HAVE TO STAY IN HERE:
+newtype Flipped m a b = Flipped { unflip :: m b a }
+
+foldlThrist :: (forall j k . (a +> j) -> (j ~> k) -> (a +> k)) 
+               -> (a +> b) 
+               -> Thrist (~>) b c 
+               -> (a +> c)
+foldlThrist f v Nil        = v
+foldlThrist f v (Cons h t) = foldlThrist f (v `f` h) t 
+
+
+foldMThrist :: Monad m=> 
+               (forall j k . (a +> j) -> (j ~> k) -> m (a +> k)) 
+               -> (a +> b) 
+               -> Thrist (~>) b c 
+               -> m (a +> c)
+foldMThrist _ a Nil        = return a
+foldMThrist f a (Cons h t) = f a h >>= \fah -> foldMThrist f fah t
+
+
+
