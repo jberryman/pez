@@ -88,6 +88,7 @@ newtype Saved a b = S { savedLenses :: Thrist (:->) a b }
  
  
  -- generate the lens we export for 'focus' using fclabel's TH:
+--focus :: Zipper a b -> b
 $(mkLabelsNoTypes [''Zipper])
 
 
@@ -137,32 +138,14 @@ savedLens = compStack . savedLenses
 
 
  --TODO: add error handling in Maybe monad for when we hit a bad constructor
-restore :: (Typeable a, Typeable b)=> a -> Saved a b -> Maybe (Zipper a b)
-restore a = foldMThrist res (Z Nil a) . savedLenses
-    where res = undefined
+restore :: (Typeable a)=> a -> Saved a b -> Maybe (Zipper a b)
+restore a = foldMThrist res (Z Nil a) . savedLenses  where
+    --res :: (Typeable a, Typeable j, Typeable k)=>Zipper a j -> (:->) j k -> Maybe (Zipper a k)
+    res (Z t a') l = let h = H l (a' `missing` l)
+                         b = getL l a'
+                      in Just $ Z (Cons h t) b
 
-{-
-restore s = Just . restore' Nil (savedLenses s)
-     where restore' :: (Typeable a, Typeable b, Typeable c)=>ZipperStack c b -> Thrist (:->) a c -> a -> Zipper a c
-           restore' zs Nil         b = Z zs b
-           restore' zs (Cons l ls) a = 
-               let h = H l (a `missing` l)
-                in restore' (Cons h zs) ls (getL l a)
--}
-{-
-restore s = Just . uncurry Z . restore' (savedLenses s)
-     where restore' :: LensStack b a -> a -> (ZipperStack b a, b)
-           restore' Nil              b = (Nil, b)  -- TODO: here is the problem: a vs b. try casting?
-           restore' (Cons (SL l) ls) a = 
-              first (Cons $ H l $ a `missing` l) (restore' ls $ getL l a)
--}
-{-
-restore s = Just . uncurry Z . restore' s
-     where restore' :: Saved a b -> a -> (ZipperStack b a, b)
-           restore' (S Nil)              b = (Nil, b)
-           restore' (S (Cons (SL l) ls)) a = 
-              first (Cons $ H l $ a `missing` l) (restore' (S ls) $ getL l a)
--}
+
 
 atTop :: Zipper a b -> Bool
 atTop (Z Nil _) = True
