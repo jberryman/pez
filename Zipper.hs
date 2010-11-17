@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeOperators, TemplateHaskell, GADTs, DeriveDataTypeable, RankNTypes #-}
+{-# LANGUAGE TypeOperators, TemplateHaskell, GADTs, DeriveDataTypeable #-}
 module Zipper (
     -- * Export Typeable and fclabels, for convenience:
       module Data.Record.Label
@@ -13,19 +13,18 @@ module Zipper (
     , close
     , closeSaving
 
-    , Saved -- stores our lens
-    , save  --extracts a Saved from zipper
-    , savedLens  -- extracts the Lens from Saved wrapper
-    , restore    -- re-enters a data type catching any errors in a cool way
+    , Saved       
+    , save        
+    , savedLens   
+    , restore     
 
-    , atTop     -- returns True if at top (can't moveUp)
+    , atTop       
     ) where
 
 
  -- this is where the magic happens:
 import Data.Record.Label
 import Data.Typeable
-import Language.Haskell.TH
 import Data.Thrist
 
  -- for our accessors, which are a category:
@@ -166,46 +165,4 @@ compStack = foldrThrist (flip(.)) id
 getReverseLensStack :: ZipperStack b a -> Thrist TypeableLens a b
 getReverseLensStack = unflip . foldlThrist rev (Flipped Nil)
     where rev (Flipped t) (H l _) = Flipped $ Cons (TL l) t
-
-
-
-
------------------------------------------------------------------
------------------------------------------------------------------
--- TO BE DEFINED IN NEW VERSION OF Data.Thrist:
---    when it is upgraded, we should remove these definitions and
---    also remove the RankNTypes extension from this file AND the
---    cabal file:
-
-foldrThrist :: (forall i j . (i ~> j) -> (j +> c) -> (i +> c)) 
-            -> (b +> c) 
-            -> Thrist (~>) a b 
-            -> (a +> c)
-foldrThrist _ v Nil        = v
-foldrThrist f v (Cons h t) = h `f` (foldrThrist f v t)
-
- -- THIS MAY HAVE TO STAY IN HERE:
-newtype Flipped m a b = Flipped { unflip :: m b a }
-
-foldlThrist :: (forall j k . (a +> j) -> (j ~> k) -> (a +> k)) 
-               -> (a +> b) 
-               -> Thrist (~>) b c 
-               -> (a +> c)
-foldlThrist f v Nil        = v
-foldlThrist f v (Cons h t) = foldlThrist f (v `f` h) t 
-
-
-foldMThrist :: Monad m=> 
-               (forall j k . (a +> j) -> (j ~> k) -> m (a +> k)) 
-               -> (a +> b) 
-               -> Thrist (~>) b c 
-               -> m (a +> c)
-foldMThrist _ a Nil        = return a
-foldMThrist f a (Cons h t) = f a h >>= \fah -> foldMThrist f fah t
-
-
-nullThrist :: Thrist (~>) a b -> Bool
-nullThrist Nil = True
-nullThrist _   = False
-
 
