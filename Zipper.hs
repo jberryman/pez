@@ -1,24 +1,33 @@
 {-# LANGUAGE TypeOperators, TemplateHaskell, GADTs, DeriveDataTypeable #-}
 module Zipper (
-    -- * Export Typeable and fclabels, for convenience:
-      module Data.Record.Label
-    , module Data.Typeable     -- WE SHOULD CONSTRAIN THIS
 
-    , Zipper()
+      Zipper()
     , moveTo
     , moveUp
     , focus
-
+    -- ** Creating and closing Zippers:
     , zipper 
     , close
     , closeSaving
-
+    -- ** Saving and recalling positions in a Zipper:
     , Saved       
     , save        
     , savedLens   
     , restore     
-
+    -- ** Querying Zipper:
     , atTop       
+
+    -- * State Monadic functions:
+    --, moveToM
+    --, moveUpM
+
+    -- * Convenience functions, types, and exports:
+    , Zipper1
+    , viewf
+    -- ** Export Typeable and fclabels:
+    , module Data.Record.Label
+    , Data.Typeable.Typeable     
+
     ) where
 
 
@@ -45,6 +54,16 @@ import Prelude hiding ((.), id) -- take these from Control.Category
  -      the child node set to undefined. Any performance difference?
  -}
 
+
+{- 
+ - TODO maybe define:
+ -  moveUpSaving :: Int -> Zipper a c -> Maybe (Saved b c, Zipper a b)
+ -     (then define moveUp in terms of moveUpSaving)
+ -  moveBack :: Saved b c -> Zipper a b -> Zipper a c
+ -     (then define 'restore' in terms of moveBack)
+ -  monadic versions of above
+ -
+ -}
 
     -------------------------
     -- TYPES: the real heros
@@ -86,20 +105,19 @@ data TypeableLens a b where
 $(mkLabelsNoTypes [''Zipper])
 
 
--- TODO: - make below use some error handling for Maybe:
- --
  -- | Move down the structure to the label specified. Return Nothing if the
  -- label is not valid for the focus's constructor:
-moveTo :: (Typeable b, Typeable c)=> (b :-> c) -> Zipper a b -> Maybe (Zipper a c)
+moveTo :: (Typeable b, Typeable c)=> (b :-> c) -> Zipper a b -> Zipper a c
 moveTo l (Z stck b) = let h = H l (b `missing` l) 
                           c = getL l b      
-                       in Just $ Z (Cons h stck) c
+                       in Z (Cons h stck) c
 
  -- | Move up a level as long as the type of the parent is what the programmer
  -- is expecting and we aren't already at the top. Otherwise return Nothing.
-moveUp :: (Typeable c, Typeable b)=> Zipper a c -> Maybe (Zipper a b)
-moveUp (Z (Cons (H _ f) stck) c) = gcast $ Z stck $ f c
-moveUp _                         = Nothing  
+moveUp :: (Typeable c, Typeable b)=> Int -> Zipper a c -> Maybe (Zipper a b)
+moveUp 0  z                        = gcast z
+moveUp n (Z (Cons (H _ f) stck) c) = moveUp (n-1) (Z stck $ f c)
+moveUp _  _                        = Nothing  
 
 
 zipper :: (Typeable a)=> a -> Zipper a a
@@ -141,6 +159,51 @@ restore a = foldMThrist res (Z Nil a) . savedLenses  where
 atTop :: Zipper a b -> Bool
 atTop = nullThrist . stack
 
+
+
+    ---------------------
+    -- MONADIC INTERFACE
+    ---------------------
+
+
+{-
+
+---- MAYBE WE SHOULD MAKE OUR FUNCTIONS POLYMORPHIC AND NOT USE
+---- THESE TYPE SYNONYMS. (so people can use stateT.lazy, etc.)
+
+-- | A synonym for the StateT / Maybe monad transformer: a state monad where 
+-- the Zipper is passed around as the state:
+type ZipperM a b r = StateT (Zipper a b) Maybe r
+
+-- | Same as ZipperM except for passing a Zipper1:
+type ZipperM1 a r = StateT (Zipper1 a) Maybe r
+
+
+{- 
+ - NOTE:
+ -  Use same monad transformer package as 'fclabels': monads-fd
+ -}
+
+--setM :: MonadState s m => (s :-> b) -> b -> m ()
+
+moveToM :: (Typeable s, Typeable c, MonadState s m) => 
+           (s :-> c) -> Zipper a
+
+-}
+
+
+    ----------------
+    -- CONVENIENCE
+    ----------------
+
+-- | a view function for a Zipper's focus. Defined simply as: `getL` focus
+viewf :: Zipper a b -> b
+viewf = getL focus
+
+-- | a simple type synonym for a Zipper where the type at the focus is the
+-- same as the type of the outer (unzippered) type. Cleans up type signatures
+-- for simple recursive types:
+type Zipper1 a = Zipper a a
 
 
     ------------
