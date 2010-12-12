@@ -1,29 +1,36 @@
 {-# LANGUAGE TypeOperators, TemplateHaskell, GADTs, DeriveDataTypeable #-}
 module Zipper (
 
+    -- * Basic Zipper functionality:
       Zipper()
-    , moveTo
-    , moveUp
-    , focus
     -- ** Creating and closing Zippers:
     , zipper 
     , close
-    , closeSaving
-    -- ** Saving and recalling positions in a Zipper:
+    -- ** Moving around:
+    , moveTo
+    , moveUp
+    -- ** Querying:
+    , focus
+    , viewf
+    , atTop       
+
+    -- * Advanced functionality:
+    -- ** Saving positions in a Zipper:
     , Saved       
     , save        
     , savedLens   
+    , closeSaving
+ -- , moveUpSaving
+    -- ** Recalling positions:
     , restore     
-    -- ** Querying Zipper:
-    , atTop       
+ -- , moveBack
 
-    -- * State Monadic functions:
-    --, moveToM
-    --, moveUpM
+    --Here ** State Monadic functions:
+    , moveToM
+    , moveUpM
 
     -- * Convenience functions, types, and exports:
     , Zipper1
-    , viewf
     -- ** Export Typeable and fclabels:
     , module Data.Record.Label
     , Data.Typeable.Typeable     
@@ -39,6 +46,12 @@ import Data.Thrist
  -- for our accessors, which are a category:
 import Control.Category         
 import Prelude hiding ((.), id) -- take these from Control.Category
+
+--import Control.Monad.State.Class
+--import Control.Monad.Trans
+import Control.Monad.State
+import Data.Dynamic
+
 
 
 {- 
@@ -140,22 +153,36 @@ closeSaving (Z stck b) = (S ls, a)
           a  = compStack (mapThrist hCont stck) b
 
 
-
+-- | Return a Saved type encapsulating the current location in the Zipper.
+-- This lets you return to a location in your data type after closing the 
+-- Zipper.
 save :: Zipper a b -> Saved a b
 save = fst . closeSaving
 
+-- | Extract a composed lens that points to the location we Saved. This lets 
+-- us modify, set or get a location that we visited with our Zipper after 
+-- closing the Zipper.
 savedLens :: (Typeable a, Typeable b)=> Saved a b -> (a :-> b)
 savedLens = compStack . mapThrist tLens . savedLenses
 
 
  --TODO: add error handling in Maybe monad for when we hit a bad constructor
+ --      a safe get function provided by fclabels would be excellent here.
+ --      How can we catch non-exhaustive pattern errors outside of the IO
+ --      monad ? If impossible, then we need it done in 'fclabels'
+-- | Return to a previously Saved location within a data-structure. 
+-- Saving and restoring lets us, for example: find some location within our 
+-- structure using a Zipper, save the location, fmap over the entire structure,
+-- and then return to where we were:
 restore :: (Typeable a)=> a -> Saved a b -> Maybe (Zipper a b)
 restore a = foldMThrist res (Z Nil a) . savedLenses  where
     res (Z t a') (TL l) = let h = H l (a' `missing` l)
                               b = getL l a'
                            in Just $ Z (Cons h t) b
 
--- | returns true if Zipper is at the top level of the data structure:
+--TODO: consider whether we should provide a 'level' function and define
+-- this as (==0) . lengthThrist . stack
+-- | returns True if Zipper is at the top level of the data structure:
 atTop :: Zipper a b -> Bool
 atTop = nullThrist . stack
 
