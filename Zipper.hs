@@ -1,4 +1,5 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, TypeOperators, TemplateHaskell, GADTs, DeriveDataTypeable #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, TypeOperators, TemplateHaskell, 
+GADTs, DeriveDataTypeable #-}
 module Zipper (
 
     -- * Basic Zipper functionality:
@@ -103,7 +104,8 @@ data Zipper a b = Z { stack  :: ZipperStack b a,
  -- | stores the path used to return to the same location in a data structure
  -- as the one we just exited. You can also extract a lens from a SavedPath that
  -- points to that location:
-newtype SavedPath a b = S { savedLenses :: Thrist TypeableLens a b } deriving (Typeable)
+newtype SavedPath a b = S { savedLenses :: Thrist TypeableLens a b } 
+    deriving (Typeable, Category)
 
 -- We need another GADT here to enforce the Typeable constraint within the
 -- hidden types in our thrist of lenses above:
