@@ -20,12 +20,13 @@ module Zipper (
     , save        
     , savedLens   
     , closeSaving
- -- , moveUpSaving
+    , moveUpSaving
     -- ** Recalling positions:
     , restore     
  -- , moveBack
 
-    --Here ** State Monadic functions:
+    -- ** State Monadic functions:
+  --, pathHere 
     , moveToM
     , moveUpM
 
@@ -51,6 +52,7 @@ import Prelude hiding ((.), id) -- take these from Control.Category
 --import Control.Monad.Trans
 import Control.Monad.State
 import Data.Dynamic
+import Control.Applicative
 
 
 
@@ -63,18 +65,19 @@ import Data.Dynamic
  - the Maybe monad. This means that the programmer has to know
  - what type a move up will produce, or deal with unknowns.
  -
- -TODO: consider instead of using section, use head form of parent with
- -      the child node set to undefined. Any performance difference?
  -}
 
 
 {- 
- - TODO maybe define:
- -  moveUpSaving :: Int -> Zipper a c -> Maybe (SavedPath b c, Zipper a b)
- -     (then define moveUp in terms of moveUpSaving)
- -  moveBack :: SavedPath b c -> Zipper a b -> Zipper a c
- -     (then define 'restore' in terms of moveBack)
- -  monadic versions of above
+ - TODO NOTES
+ -   - When the 'fclabels' package supports failure handling a.la the code on
+ -   Github, then these functions will take advantage of that by returning
+ -   Nothing when a lens is applied to an invalid constructor:
+ -       * moveBack
+ -       * restore
+ -   
+ -    - consider instead of using section, use head form of parent with
+ -    the child node set to undefined. Any performance difference?
  -
  -}
 
@@ -100,7 +103,7 @@ data Zipper a b = Z { stack  :: ZipperStack b a,
  -- | stores the path used to return to the same location in a data structure
  -- as the one we just exited. You can also extract a lens from a SavedPath that
  -- points to that location:
-newtype SavedPath a b = S { savedLenses :: Thrist TypeableLens a b }
+newtype SavedPath a b = S { savedLenses :: Thrist TypeableLens a b } deriving (Typeable)
 
 -- We need another GADT here to enforce the Typeable constraint within the
 -- hidden types in our thrist of lenses above:
@@ -125,7 +128,7 @@ moveTo l (Z stck b) = let h = H l (b `missing` l)
                           c = getL l b      
                        in Z (Cons h stck) c
 
- -- | Move up a level as long as the type of the parent is what the programmer
+ -- | Move up n levels as long as the type of the parent is what the programmer
  -- is expecting and we aren't already at the top. Otherwise return Nothing.
 moveUp :: (Typeable c, Typeable b)=> Int -> Zipper a c -> Maybe (Zipper a b)
 moveUp 0  z                        = gcast z
@@ -145,22 +148,24 @@ close = snd . closeSaving
     ------------------------------
     -- ADVANCED ZIPPER FUNCTIONS:
     ------------------------------
+
  
-{-
- -
  -- | Move up a level as long as the type of the parent is what the programmer
  -- is expecting and we aren't already at the top. Otherwise return Nothing.
 moveUpSaving :: (Typeable c, Typeable b)=> Int -> Zipper a c -> Maybe (Zipper a b, SavedPath b c)
-moveUpSaving = mv Nil where
-    mv thr 0  z                        = fmap (\z'->(z',S thr)) (gcast z)
-    mv thr n (Z (Cons (H l f) stck) c) = let thr' = Cons (TL l) thr
-                                          in mv thr' (n-1) (Z stck $ f c)
-    mv thr _  _                        = Nothing  
+moveUpSaving n' = mv n' (gcast $ Flipped Nil) . gcast where
+    -- Flipped allows us to gcast on the pivot type var:
+    mv 0 thr z = (,) <$> z <*> (S . unflip <$> thr)
+     -- pattern match failure in 'do' handles case where we moveUp too much:
+    mv n thr z = do (Z (Cons (H l f) stck) c) <- z
+                    thr' <- Cons (TL l) . unflip <$> thr
+                    let z' = Z stck $ f c
+                    mv (n-1) (gcast $ Flipped thr') (gcast z')
 
+ -- | Follow a previously-saved path down the zipper to a new location:
 moveBack :: Zipper a b -> SavedPath b c -> Zipper a c
 moveBack = undefined
--
--}
+
 
 
 closeSaving :: Zipper a b -> (SavedPath a b, a)
