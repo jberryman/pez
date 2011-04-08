@@ -26,18 +26,12 @@ module Data.Typeable.Zipper (
     , restore     
  -- , moveBack
 
-    -- ** State Monadic functions:
-  --, pathHere 
-    , moveToM
-    , moveUpM
-
     -- * Convenience functions, types, and exports:
     , Zipper1
     -- ** Export Typeable class and fclabels package:
     , module Data.Record.Label
     , Data.Typeable.Typeable     
-
-    ) where
+) where
 
 
  -- this is where the magic happens:
@@ -48,11 +42,6 @@ import Data.Thrist
  -- for our accessors, which are a category:
 import Control.Category         
 import Prelude hiding ((.), id) -- take these from Control.Category
-
---import Control.Monad.State.Class
---import Control.Monad.Trans
-import Control.Monad.State
-import Data.Dynamic
 import Control.Applicative
 
 
@@ -156,7 +145,7 @@ close = snd . closeSaving
  -- is expecting and we aren't already at the top. Otherwise return Nothing.
 moveUpSaving :: (Typeable c, Typeable b)=> Int -> Zipper a c -> Maybe (Zipper a b, SavedPath b c)
 moveUpSaving n' = mv n' (gcast $ Flipped Nil) . gcast where
-    -- Flipped allows us to gcast on the pivot type var:
+     -- Flipped allows us to gcast on the pivot type var:
     mv 0 thr z = (,) <$> z <*> (S . unflip <$> thr)
      -- pattern match failure in 'do' handles case where we moveUp too much:
     mv n thr z = do (Z (Cons (H l f) stck) c) <- z
@@ -211,77 +200,6 @@ restore a = foldMThrist res (Z Nil a) . savedLenses  where
 -- | returns True if Zipper is at the top level of the data structure:
 atTop :: Zipper a b -> Bool
 atTop = nullThrist . stack
-
-
-----------------------------------------------------------------------------
-
-
-    ---------------------
-    -- MONADIC INTERFACE
-    ---------------------
-
-
-{- 
- - NOTE:
- -  Use same monad transformer package as 'fclabels': monads-fd
- -}
-{-
- - NOTE:
- -  either make an existential State monad library
--   or... ?
-
---moveToM :: (Typeable a, MonadState (Zipper1 a) m)=> (a :-> a) -> m a
-moveToM l = modify (moveTo l) >> getM focus
-
---moveUpM :: (Typeable a)=> Int -> StateT (Zipper1 a) Maybe a
-moveUpM n = get >>= lift . moveUp n >>= put >> getM focus
--}
-
-
-{-
- -TODO: it would be useful here for users to make the transformer polymorphic
- - in any Monad m, instead of Maybe, especially if we can provide some nice
- - error messages in 'fail'
- -  WHAT IF WE NEEDED TO INCORPORATE ErrorT INTO THE MONAD TRANSFORM ER STACK 
- -  HERE. YIKES.
- -}
-newtype ZipperM t a = ZM { stateT :: StateT Dynamic Maybe a } deriving Monad
-
-
-moveToM :: (Typeable a, Typeable b, Typeable t)=> (a :-> b) -> ZipperM t b
-moveToM l = undefined
-
-moveUpM :: (Typeable a, Typeable t)=> Int -> ZipperM t a
-moveUpM n = undefined
-
-moveUpSavingM :: (Typeable a, Typeable b, Typeable t)=> Int -> ZipperM t (a, SavedPath a b)
-moveUpSavingM n = undefined
-
-
-runZipper :: (Typeable t, Typeable b)=>ZipperM t a -> t -> Maybe (a, Zipper t b)
-runZipper = undefined
-
-evalZipper :: (Typeable t)=>ZipperM t a -> t -> Maybe a
-evalZipper = undefined
-
--- | Run a function on the entire data structure we are inside of. If this 
--- alters the shape of the structure such that the path from the top to
--- our current focus gets broken, our computation will fail (int the Maybe
--- monad). Returns the Zipper focus after applying modify function.
-modifyGlobal :: (Typeable t, Typeable a)=> (t -> t) -> ZipperM t a
-modifyGlobal = undefined
-
-    -- QUERYING THE ZIPPER STATE:
-    -----------------------------
-
--- | returns the current zipper focus. This type is casted and will cause the 
--- computation to fail (in the Maybe monad) if used as a value of a different 
--- type:
-viewfM :: (Typeable a, Typeable t)=> ZipperM t a
-viewfM = undefined
-
-pathHere :: (Typeable t, Typeable b)=> ZipperM t (SavedPath t b)
-pathHere = undefined
 
 
 
