@@ -47,27 +47,25 @@ import Control.Applicative
 
 
 {- 
- - DESCRIPTION:
+ -   DESCRIPTION:
  -
- - we use a Thrist to create a type-threaded stack of continuations
- - allowing us to have a polymorphic history of where we've been.
- - by using Typeable, we are able to "move up" by type casting in
- - the Maybe monad. This means that the programmer has to know
- - what type a move up will produce, or deal with unknowns.
+ -   we use a Thrist to create a type-threaded stack of continuations
+ -   allowing us to have a polymorphic history of where we've been.
+ -   by using Typeable, we are able to "move up" by type casting in
+ -   the Maybe monad. This means that the programmer has to know
+ -   what type a move up will produce, or deal with unknowns.
  -
- -}
-
-
-{- 
+ -
  - TODO NOTES
+ -
  -   - When the 'fclabels' package supports failure handling a.la the code on
  -   Github, then these functions will take advantage of that by returning
  -   Nothing when a lens is applied to an invalid constructor:
  -       * moveBack
  -       * restore
  -   
- -    - consider instead of using section, use head form of parent with
- -    the child node set to undefined. Any performance difference?
+ -   - consider instead of using section, use head form of parent with
+ -   the child node set to undefined. Any performance difference?
  -
  -}
 
