@@ -1,6 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, TypeOperators, TemplateHaskell, 
 GADTs, DeriveDataTypeable #-}
-module Zipper (
+module Data.Typeable.Zipper (
 
     -- * Basic Zipper functionality:
       Zipper()
