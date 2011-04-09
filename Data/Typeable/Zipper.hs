@@ -4,6 +4,7 @@ module Data.Typeable.Zipper (
 
     -- * Basic Zipper functionality
       Zipper()
+    , ZPath
     -- ** Creating and closing Zippers
     , zipper 
     , close
@@ -24,7 +25,6 @@ module Data.Typeable.Zipper (
     , moveUpSaving
     -- ** Recalling positions:
     , restore     
-    , moveBack
 
     -- * Convenience functions, types, and exports
     , Zipper1
@@ -45,16 +45,11 @@ module Data.Typeable.Zipper (
  -
  - TODO NOTES
  -
- -   - consider making moveTo take a class, with (:->) and SavedPath as
- -   instances. This would let us get rid of moveBack and use a polymorphic
- -   moveTo
- -
  -   - create an operator synonym for 'moveTo'
  -
  -   - When the 'fclabels' package supports failure handling a.la the code on
  -   Github, then these functions will take advantage of that by returning
  -   Nothing when a lens is applied to an invalid constructor:
- -       * moveBack
  -       * moveTo
  -       * restore
  -   
@@ -105,6 +100,16 @@ data TypeableLens a b where
     TL :: (Typeable a,Typeable b)=> {tLens :: (a :-> b)} -> TypeableLens a b
 
 
+-- TODO: TRY USING FUNDEPS ALA THE MONAD TRANSFORMER LIBRARIES FOR CLASS
+-- CONSTRAINTS HERE:
+-- | Types of the ZPath act as references to "paths" down through a datatype.
+-- Currently lenses from 'fclabels' and SavedPath types are instances
+class ZPath p where
+     -- | Move down the structure to the label specified. Return Nothing if the
+     -- label is not valid for the focus's constructor:
+    moveTo :: (Typeable a, Typeable b, Typeable c) => p b c -> Zipper a b -> Zipper a c
+
+
 
     ---------------------------
     -- Basic Zipper Functions:
@@ -115,15 +120,12 @@ data TypeableLens a b where
 $(mkLabelsNoTypes [''Zipper])
 
 
- -- | Move down the structure to the label specified. Return Nothing if the
- -- label is not valid for the focus's constructor:
-moveTo :: (Typeable b, Typeable c)=> (b :-> c) -> Zipper a b -> Zipper a c
-moveTo = flip pivot . TL
-{- OLD:
-moveTo l (Z stck b) = let h = H l (b `missing` l) 
-                          c = getL l b      
-                       in Z (Cons h stck) c
--}
+instance ZPath (:->) where
+    moveTo = flip pivot . TL
+
+instance ZPath SavedPath where
+    moveTo = flip (foldlThrist pivot) . savedLenses  
+
 
  -- | Move up n levels as long as the type of the parent is what the programmer
  -- is expecting and we aren't already at the top. Otherwise return Nothing.
@@ -159,18 +161,6 @@ moveUpSaving n' = mv n' (gcast $ Flipped Nil) . gcast where
                     let z' = Z stck $ f c
                     mv (n-1) (gcast $ Flipped thr') (gcast z')
 
- -- | Follow a previously-saved path down the zipper to a new location:
---moveBack :: SavedPath b c -> Zipper a b -> Maybe (Zipper a c) -- EVENTUALLY
-moveBack :: SavedPath b c -> Zipper a b -> Zipper a c
-moveBack = flip (foldlThrist pivot) . savedLenses  
-{- OLD:
-moveBack = flip (foldlThrist res) . savedLenses  where
-    res (Z t a') (TL l) = let h = H l (a' `missing` l)
-                              b = getL l a'
-                           in Z (Cons h t) b
--}
-
-
 
 closeSaving :: Zipper a b -> (SavedPath a b, a)
 closeSaving (Z stck b) = (S ls, a)
@@ -190,16 +180,13 @@ save = fst . closeSaving
 savedLens :: (Typeable a, Typeable b)=> SavedPath a b -> (a :-> b)
 savedLens = compStack . mapThrist tLens . savedLenses
 
-{-
- - TODO: When fclabels supports failure handling we will use it to support
- -       failure on applying a lens to the wrong constructor
- -}
+
 -- | Return to a previously SavedPath location within a data-structure. 
 -- Saving and restoring lets us for example: find some location within our 
 -- structure using a Zipper, save the location, fmap over the entire structure,
 -- and then return to where we were:
-restore :: (Typeable a)=> SavedPath a b -> a -> Zipper a b
-restore s = moveBack s  . zipper
+restore :: (ZPath p, Typeable a, Typeable b)=> p a b -> a -> Zipper a b
+restore s = moveTo s  . zipper
 
 
 -- | returns True if Zipper is at the top level of the data structure:
