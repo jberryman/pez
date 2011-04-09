@@ -2,21 +2,21 @@
 GADTs, DeriveDataTypeable #-}
 module Data.Typeable.Zipper (
 
-    -- * Basic Zipper functionality:
+    -- * Basic Zipper functionality
       Zipper()
-    -- ** Creating and closing Zippers:
+    -- ** Creating and closing Zippers
     , zipper 
     , close
-    -- ** Moving around:
+    -- ** Moving around
     , moveTo
     , moveUp
-    -- ** Querying:
+    -- ** Querying
     , focus
     , viewf
     , atTop       
 
-    -- * Advanced functionality:
-    -- ** Saving positions in a Zipper:
+    -- * Advanced functionality
+    -- ** Saving positions in a Zipper
     , SavedPath       
     , save        
     , savedLens   
@@ -24,27 +24,14 @@ module Data.Typeable.Zipper (
     , moveUpSaving
     -- ** Recalling positions:
     , restore     
- -- , moveBack
+    , moveBack
 
-    -- * Convenience functions, types, and exports:
+    -- * Convenience functions, types, and exports
     , Zipper1
-    -- ** Export Typeable class and fclabels package:
+    -- ** Export Typeable class and fclabels package
     , module Data.Record.Label
     , Data.Typeable.Typeable     
 ) where
-
-
- -- this is where the magic happens:
-import Data.Record.Label
-import Data.Typeable
-import Data.Thrist
-
- -- for our accessors, which are a category:
-import Control.Category         
-import Prelude hiding ((.), id) -- take these from Control.Category
-import Control.Applicative
-
-
 
 {- 
  -   DESCRIPTION:
@@ -58,6 +45,12 @@ import Control.Applicative
  -
  - TODO NOTES
  -
+ -   - consider making moveTo take a class, with (:->) and SavedPath as
+ -   instances. This would let us get rid of moveBack and use a polymorphic
+ -   moveTo
+ -
+ -   - create an operator synonym for 'moveTo'
+ -
  -   - When the 'fclabels' package supports failure handling a.la the code on
  -   Github, then these functions will take advantage of that by returning
  -   Nothing when a lens is applied to an invalid constructor:
@@ -68,6 +61,17 @@ import Control.Applicative
  -   the child node set to undefined. Any performance difference?
  -
  -}
+
+ -- this is where the magic happens:
+import Data.Record.Label
+import Data.Typeable
+import Data.Thrist
+
+ -- for our accessors, which are a category:
+import Control.Category         
+import Prelude hiding ((.), id) -- take these from Control.Category
+import Control.Applicative
+
 
     -------------------------
     -- TYPES: the real heros
@@ -152,8 +156,12 @@ moveUpSaving n' = mv n' (gcast $ Flipped Nil) . gcast where
                     mv (n-1) (gcast $ Flipped thr') (gcast z')
 
  -- | Follow a previously-saved path down the zipper to a new location:
-moveBack :: Zipper a b -> SavedPath b c -> Zipper a c
-moveBack = undefined
+--moveBack :: SavedPath b c -> Zipper a b -> Maybe (Zipper a c) -- EVENTUALLY
+moveBack :: SavedPath b c -> Zipper a b -> Zipper a c
+moveBack = flip (foldlThrist res) . savedLenses  where
+    res (Z t a') (TL l) = let h = H l (a' `missing` l)
+                              b = getL l a'
+                           in Z (Cons h t) b
 
 
 
@@ -176,30 +184,26 @@ savedLens :: (Typeable a, Typeable b)=> SavedPath a b -> (a :-> b)
 savedLens = compStack . mapThrist tLens . savedLenses
 
 {-
- - TODO: add error handling in Maybe monad for when we hit a bad constructor
- -       a safe get function provided by fclabels would be excellent here.
- -       How can we catch non-exhaustive pattern errors outside of the IO
- -       monad ? If impossible, then we need it done in 'fclabels'
+ - TODO: When fclabels supports failure handling we will use it to support
+ -       failure on applying a lens to the wrong constructor
  -}
 -- | Return to a previously SavedPath location within a data-structure. 
--- Saving and restoring lets us, for example: find some location within our 
+-- Saving and restoring lets us for example: find some location within our 
 -- structure using a Zipper, save the location, fmap over the entire structure,
 -- and then return to where we were:
-restore :: (Typeable a)=> a -> SavedPath a b -> Maybe (Zipper a b)
-restore a = foldMThrist res (Z Nil a) . savedLenses  where
-    res (Z t a') (TL l) = let h = H l (a' `missing` l)
-                              b = getL l a'
-                           in Just $ Z (Cons h t) b
+restore :: (Typeable a)=> SavedPath a b -> a -> Zipper a b
+restore s = moveBack s  . zipper
 
-{-
- - TODO: consider whether we should provide a 'level' function and define
- -}
--- this as (==0) . lengthThrist . stack
+
 -- | returns True if Zipper is at the top level of the data structure:
 atTop :: Zipper a b -> Bool
 atTop = nullThrist . stack
 
-
+{-
+-- | Return our depth in the Zipper. if atTop z then level z == 0
+level :: Zipper a b -> Int
+level = foldlThrist (.) ...forgot how to do this :(
+-}
 
 ----------------------------------------------------------------------------
 
