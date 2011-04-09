@@ -233,15 +233,13 @@ type Zipper1 a = Zipper a a
     -- HELPERS
     ------------
 
+ -- The core of our 'moveTo' function
 pivot (Z t a') (TL l) = Z (Cons h t) b
     where h = H l (a' `missing` l)
           b = getL l a'
+           --TODO: MAYBE GIVE THE GC SOME STRICTNESS HINTS HERE?:
+          missing a l = flip (setL l) a
 
-
---TODO: MAYBE GIVE THE GC SOME STRICTNESS HINTS HERE?:
- -- make a hole in a type corresponding to the passed lens, forming a section:
-missing :: a -> (a :-> b) -> (b -> a)
-missing a l = flip (setL l) a
 
  -- fold a thrist into a single category by composing the stack with (.)
  -- Here 'cat' will be either (->) or (:->):
