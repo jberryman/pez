@@ -55,6 +55,7 @@ module Data.Typeable.Zipper (
  -   Github, then these functions will take advantage of that by returning
  -   Nothing when a lens is applied to an invalid constructor:
  -       * moveBack
+ -       * moveTo
  -       * restore
  -   
  -   - consider instead of using section, use head form of parent with
@@ -117,9 +118,12 @@ $(mkLabelsNoTypes [''Zipper])
  -- | Move down the structure to the label specified. Return Nothing if the
  -- label is not valid for the focus's constructor:
 moveTo :: (Typeable b, Typeable c)=> (b :-> c) -> Zipper a b -> Zipper a c
+moveTo = flip pivot . TL
+{- OLD:
 moveTo l (Z stck b) = let h = H l (b `missing` l) 
                           c = getL l b      
                        in Z (Cons h stck) c
+-}
 
  -- | Move up n levels as long as the type of the parent is what the programmer
  -- is expecting and we aren't already at the top. Otherwise return Nothing.
@@ -158,10 +162,13 @@ moveUpSaving n' = mv n' (gcast $ Flipped Nil) . gcast where
  -- | Follow a previously-saved path down the zipper to a new location:
 --moveBack :: SavedPath b c -> Zipper a b -> Maybe (Zipper a c) -- EVENTUALLY
 moveBack :: SavedPath b c -> Zipper a b -> Zipper a c
+moveBack = flip (foldlThrist pivot) . savedLenses  
+{- OLD:
 moveBack = flip (foldlThrist res) . savedLenses  where
     res (Z t a') (TL l) = let h = H l (a' `missing` l)
                               b = getL l a'
                            in Z (Cons h t) b
+-}
 
 
 
@@ -225,6 +232,10 @@ type Zipper1 a = Zipper a a
     ------------
     -- HELPERS
     ------------
+
+pivot (Z t a') (TL l) = Z (Cons h t) b
+    where h = H l (a' `missing` l)
+          b = getL l a'
 
 
 --TODO: MAYBE GIVE THE GC SOME STRICTNESS HINTS HERE?:
