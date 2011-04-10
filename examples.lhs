@@ -128,7 +128,7 @@ these may change or disappear if I decide they are a bad idea:
 > shortenTimer :: Timer -> Maybe Timer
 > shortenTimer = fmap (Timer . close) . shortenTick . zipper . tickTocks
 >     where shortenTick z@(viewf-> Claaaannnnggg) = 
->               z .- 2 $.> Claaaannnnggg
+>               z .- 2 ?> Claaaannnnggg
 >           shortenTick z = shortenTick (z .+ tock .+ tick)
 
 The function above would have returned Nothing from 'moveUp' had the timer not 

@@ -24,7 +24,7 @@ module Data.Typeable.Zipper (
     -- * Convenience operators, types, and exports
     , Zipper1
     -- ** Operators
-    , (.+) , (.>) , (.-) , ($.+) , ($.>) , ($.-)
+    , (.+) , (.>) , (.-) , (?+) , (?>) , (?-)
     -- ** Export Typeable class and fclabels package
     , module Data.Record.Label
     , Data.Typeable.Typeable     
@@ -218,7 +218,7 @@ type Zipper1 a = Zipper a a
 
 
 -- bind higher than <$>. Is this acceptable?:
-infixl 5 .+, .>, .-, $.+, $.>, $.-
+infixl 5 .+, .>, .-, ?+, ?>, ?-
 
 -- | 'moveTo' with arguments flipped. Operator plays on the idea of addition of
 -- levels onto the focus.
@@ -234,14 +234,14 @@ infixl 5 .+, .>, .-, $.+, $.>, $.-
 (.>) :: Zipper a b -> b -> Zipper a b
 (.>) = flip (setL focus)
 
-($.+) :: (Functor f, ZPath p, Typeable b, Typeable c)=> f (Zipper a b) -> p b c -> f (Zipper a c)
-($.+)= flip (fmap . moveTo)
+(?+) :: (ZPath p, Typeable b, Typeable c)=> Maybe (Zipper a b) -> p b c -> Maybe (Zipper a c)
+(?+)= flip (fmap . moveTo)
 
-($.-) :: (Typeable c, Typeable b)=> Maybe (Zipper a c) -> Int -> Maybe (Zipper a b)
-mz $.- n = mz >>= moveUp n
+(?-) :: (Typeable c, Typeable b)=> Maybe (Zipper a c) -> Int -> Maybe (Zipper a b)
+mz ?- n = mz >>= moveUp n
 
-($.>) :: (Functor f)=> f (Zipper a b) -> b -> f (Zipper a b)
-($.>) = flip (fmap . setL focus)
+(?>) :: Maybe (Zipper a b) -> b -> Maybe (Zipper a b)
+(?>) = flip (fmap . setL focus)
 
 
     ------------
