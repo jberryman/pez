@@ -3,18 +3,13 @@ GADTs, DeriveDataTypeable #-}
 module Data.Typeable.Zipper (
 
     -- * Basic Zipper functionality
-      Zipper()
-    , ZPath
+      Zipper() , ZPath
     -- ** Creating and closing Zippers
-    , zipper 
-    , close
+    , zipper , close
     -- ** Moving around
-    , moveTo
-    , moveUp
+    , moveTo , moveUp
     -- ** Querying
-    , focus
-    , viewf
-    , atTop       
+    , focus , viewf , atTop       
 
     -- * Advanced functionality
     -- ** Saving positions in a Zipper
@@ -26,8 +21,10 @@ module Data.Typeable.Zipper (
     -- ** Recalling positions:
     , restore     
 
-    -- * Convenience functions, types, and exports
+    -- * Convenience operators, types, and exports
     , Zipper1
+    -- ** Operators
+    , (.+) , (.>) , (.-) , ($.+) , ($.>) , ($.-)
     -- ** Export Typeable class and fclabels package
     , module Data.Record.Label
     , Data.Typeable.Typeable     
@@ -45,7 +42,6 @@ module Data.Typeable.Zipper (
  -
  - TODO NOTES
  -
- -   - create an operator synonym for 'moveTo'
  -
  -   - When the 'fclabels' package supports failure handling a.la the code on
  -   Github, then these functions will take advantage of that by returning
@@ -55,6 +51,8 @@ module Data.Typeable.Zipper (
  -   
  -   - consider instead of using section, use head form of parent with
  -   the child node set to undefined. Any performance difference?
+ -
+ -   - actually look at how this performs in terms of stack space, etc.
  -
  -}
 
@@ -100,14 +98,17 @@ data TypeableLens a b where
     TL :: (Typeable a,Typeable b)=> {tLens :: (a :-> b)} -> TypeableLens a b
 
 
+
 -- TODO: TRY USING FUNDEPS ALA THE MONAD TRANSFORMER LIBRARIES FOR CLASS
 -- CONSTRAINTS HERE:
+--class (Typeable b, Typeable c) => ZPath p b c | p -> b, p -> c where
+--
 -- | Types of the ZPath act as references to "paths" down through a datatype.
 -- Currently lenses from 'fclabels' and SavedPath types are instances
 class ZPath p where
      -- | Move down the structure to the label specified. Return Nothing if the
      -- label is not valid for the focus's constructor:
-    moveTo :: (Typeable a, Typeable b, Typeable c) => p b c -> Zipper a b -> Zipper a c
+    moveTo :: (Typeable b, Typeable c) => p b c -> Zipper a b -> Zipper a c
 
 
 
@@ -135,7 +136,7 @@ moveUp n (Z (Cons (H _ f) stck) c) = moveUp (n-1) (Z stck $ f c)
 moveUp _  _                        = Nothing  
 
 
-zipper :: (Typeable a)=> a -> Zipper a a
+zipper :: a -> Zipper a a
 zipper = Z Nil
 
 
@@ -214,6 +215,33 @@ viewf = getL focus
 -- same as the type of the outer (unzippered) type. Cleans up type signatures
 -- for simple recursive types:
 type Zipper1 a = Zipper a a
+
+
+-- bind higher than <$>. Is this acceptable?:
+infixl 5 .+, .>, .-, $.+, $.>, $.-
+
+-- | 'moveTo' with arguments flipped. Operator plays on the idea of addition of
+-- levels onto the focus.
+(.+) :: (ZPath p, Typeable b, Typeable c)=> Zipper a b -> p b c -> Zipper a c
+(.+) = flip moveTo
+
+-- | 'moveUp' with arguments flipped. Operator syntax comes from the idea of
+-- moving up as subtraction.
+(.-) :: (Typeable c, Typeable b)=> Zipper a c -> Int -> Maybe (Zipper a b)
+(.-) = flip moveUp
+
+-- | setL focus, with arguments flipped
+(.>) :: Zipper a b -> b -> Zipper a b
+(.>) = flip (setL focus)
+
+($.+) :: (Functor f, ZPath p, Typeable b, Typeable c)=> f (Zipper a b) -> p b c -> f (Zipper a c)
+($.+)= flip (fmap . moveTo)
+
+($.-) :: (Typeable c, Typeable b)=> Maybe (Zipper a c) -> Int -> Maybe (Zipper a b)
+mz $.- n = mz >>= moveUp n
+
+($.>) :: (Functor f)=> f (Zipper a b) -> b -> f (Zipper a b)
+($.>) = flip (fmap . setL focus)
 
 
     ------------
