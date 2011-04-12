@@ -42,6 +42,14 @@ module Data.Typeable.Zipper (
  -
  - TODO NOTES
  -
+ -   - Include as part of package a module: Data.Record.Label.Prelude that
+ -   exports labels for haskell builtin types
+ -
+ -   - Create a 'moveUntil' function, or something else to capture the ugly:
+ -          descend z@(viewf -> Gong) = z
+ -          descend z                 = descend $ moveTo tock z
+ -    ...perhaps we can make something clever using property of pattern match
+ -     failure in 'do' block?
  -
  -   - When the 'fclabels' package supports failure handling a.la the code on
  -   Github, then these functions will take advantage of that by returning
