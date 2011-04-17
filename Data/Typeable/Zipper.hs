@@ -157,18 +157,26 @@ close = snd . closeSaving
     -- ADVANCED ZIPPER FUNCTIONS:
     ------------------------------
 
- 
+--- THIS FUNCTION GAVE ME THE MOST TROUBLE AND COULD PROBABLY BE SIMPLIFIED AND
+--- 'moveUP' DEFINED IN TERMS OF IT, BUT FOR NOW I AM HAPPY WITH SOMETHING THAT
+--- WORKS. 
+
  -- | Move up a level as long as the type of the parent is what the programmer
  -- is expecting and we aren't already at the top. Otherwise return Nothing.
 moveUpSaving :: (Typeable c, Typeable b)=> Int -> Zipper a c -> Maybe (Zipper a b, SavedPath b c)
-moveUpSaving n' = mv n' (gcast $ Flipped Nil) . gcast where
-     -- Flipped allows us to gcast on the pivot type var:
-    mv 0 thr z = (,) <$> z <*> (S . unflip <$> thr)
-     -- pattern match failure in 'do' handles case where we moveUp too much:
-    mv n thr z = do (Z (Cons (H l f) stck) c) <- z
-                    thr' <- Cons (TL l) . unflip <$> thr
-                    let z' = Z stck $ f c
-                    mv (n-1) (gcast $ Flipped thr') (gcast z')
+moveUpSaving n z = (,) <$> moveUp n z <*> saveFromAbove n z
+
+ -- | return a SavedPath from n levels up to the current level
+saveFromAbove n = fmap (S . zLenses) . mvUpSavingL n . flip ZL Nil . stack
+
+data ZipperLenses a c b = ZL { zlStack :: ZipperStack b a,
+                               zLenses :: Thrist TypeableLens b c }
+
+mvUpSavingL :: (Typeable b', Typeable b)=> Int -> ZipperLenses a c b -> Maybe (ZipperLenses a c b')
+mvUpSavingL 0 z                           = gcast z
+mvUpSavingL n (ZL (Cons (H l _) stck) ls) = mvUpSavingL (n-1) (ZL stck $ Cons (TL l) ls)
+mvUpSavingL _ _                           = Nothing
+
 
 
 closeSaving :: Zipper a b -> (SavedPath a b, a)

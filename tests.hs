@@ -53,6 +53,8 @@ main = sequence_
         [ quickCheck prop_simple_creation
         , quickCheck prop_simple_recursive_movement
         , quickCheck prop_mutual_saving
+        , quickCheck prop_simple_moveUp_past_top
+        , quickCheck prop_moveUpSaving
         ]
 
 prop_simple_creation :: [Char] -> Bool
@@ -95,3 +97,25 @@ prop_mutual_saving tt = checkSaving $ descend $ moveTo tickTocks $ zipper tt
                -- moving to rebuilt lens and moving up gets us back to top:
                   (maybe False ((==tt) . viewf) $ 
                       moveUp 1 $ moveTo lns $ zipper tt)
+
+-- check moveUpSaving & Nothing returned from failed cast:
+prop_moveUpSaving :: ((),((),(Int,Int))) -> Bool
+prop_moveUpSaving = 
+   check . moveTo lSnd . moveTo lSnd . moveTo lSnd . zipper 
+       where check z = maybe False id $ do
+                 (z', p') <- moveUpSaving 2 z
+                 let n = viewf z 
+                     -- otherwise type is ambiguous:
+                     typeofz' = z' :: Zipper ((),((),(Int,Int))) ((),(Int,Int))
+                     n' = viewf $ moveTo p' z'
+                 -- we successfully moved up and back down again?:
+                 return $ n == n'
+
+
+
+-- test moveUp past top of Zipper, 
+prop_simple_moveUp_past_top :: [Int] -> Bool
+prop_simple_moveUp_past_top = check . moveUp 2 . moveTo lTail . zipper where
+    -- this sig required else type ambiguous:
+    check :: Maybe (Zipper1 [Int]) -> Bool
+    check = maybe True (const False)
