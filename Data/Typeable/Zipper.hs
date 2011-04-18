@@ -15,6 +15,7 @@ module Data.Typeable.Zipper (
     -- ** Saving positions in a Zipper
     , SavedPath       
     , save        
+    , saveFromAbove
     , savedLens   
     , closeSaving
     , moveUpSaving
@@ -166,16 +167,17 @@ close = snd . closeSaving
 moveUpSaving :: (Typeable c, Typeable b)=> Int -> Zipper a c -> Maybe (Zipper a b, SavedPath b c)
 moveUpSaving n z = (,) <$> moveUp n z <*> saveFromAbove n z
 
- -- | return a SavedPath from n levels up to the current level
-saveFromAbove n = fmap (S . zLenses) . mvUpSavingL n . flip ZL Nil . stack
-
 data ZipperLenses a c b = ZL { zlStack :: ZipperStack b a,
                                zLenses :: Thrist TypeableLens b c }
 
-mvUpSavingL :: (Typeable b', Typeable b)=> Int -> ZipperLenses a c b -> Maybe (ZipperLenses a c b')
-mvUpSavingL 0 z                           = gcast z
-mvUpSavingL n (ZL (Cons (H l _) stck) ls) = mvUpSavingL (n-1) (ZL stck $ Cons (TL l) ls)
-mvUpSavingL _ _                           = Nothing
+
+ -- | return a SavedPath from n levels up to the current level
+saveFromAbove n = fmap (S . zLenses) . mvUpSavingL n . flip ZL Nil . stack
+    where
+        mvUpSavingL :: (Typeable b', Typeable b)=> Int -> ZipperLenses a c b -> Maybe (ZipperLenses a c b')
+        mvUpSavingL 0 z                           = gcast z
+        mvUpSavingL n (ZL (Cons (H l _) stck) ls) = mvUpSavingL (n-1) (ZL stck $ Cons (TL l) ls)
+        mvUpSavingL _ _                           = Nothing
 
 
 
