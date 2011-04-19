@@ -63,6 +63,11 @@ module Data.Typeable.Zipper (
  -
  -   - actually look at how this performs in terms of space/time
  -
+ -   ROADMAP:
+ -    Pink Elephant
+ -    Patiently Expectant
+ -    Probably ??
+ -
  -}
 
  -- this is where the magic happens:
