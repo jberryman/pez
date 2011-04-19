@@ -3,11 +3,11 @@ GADTs, DeriveDataTypeable #-}
 module Data.Typeable.Zipper (
 
     -- * Basic Zipper functionality
-      Zipper() , ZPath
+      Zipper() 
     -- ** Creating and closing Zippers
     , zipper , close
     -- ** Moving around
-    , moveTo , moveUp
+    , ZPath(..) , moveUp
     -- ** Querying
     , focus , viewf , atTop       
 
@@ -61,7 +61,7 @@ module Data.Typeable.Zipper (
  -   - consider instead of using section, use head form of parent with
  -   the child node set to undefined. Any performance difference?
  -
- -   - actually look at how this performs in terms of stack space, etc.
+ -   - actually look at how this performs in terms of space/time
  -
  -}
 
@@ -95,9 +95,9 @@ data Zipper a b = Z { stack  :: ZipperStack b a,
                     } deriving (Typeable)
     
 
- -- | stores the path used to return to the same location in a data structure
- -- as the one we just exited. You can also extract a lens from a SavedPath that
- -- points to that location:
+-- | stores the path used to return to the same location in a data structure
+-- as the one we just exited. You can also extract a lens from a SavedPath that
+-- points to that location:
 newtype SavedPath a b = S { savedLenses :: Thrist TypeableLens a b } 
     deriving (Typeable, Category)
 
@@ -112,11 +112,11 @@ data TypeableLens a b where
 -- CONSTRAINTS HERE:
 --class (Typeable b, Typeable c) => ZPath p b c | p -> b, p -> c where
 --
--- | Types of the ZPath act as references to "paths" down through a datatype.
+-- | Types of the ZPath class act as references to "paths" down through a datatype.
 -- Currently lenses from 'fclabels' and SavedPath types are instances
 class ZPath p where
-     -- | Move down the structure to the label specified. Return Nothing if the
-     -- label is not valid for the focus's constructor:
+    -- | Move down the structure to the label specified. Return Nothing if the
+    -- label is not valid for the focus's constructor:
     moveTo :: (Typeable b, Typeable c) => p b c -> Zipper a b -> Zipper a c
 
 
@@ -137,8 +137,8 @@ instance ZPath SavedPath where
     moveTo = flip (foldlThrist pivot) . savedLenses  
 
 
- -- | Move up n levels as long as the type of the parent is what the programmer
- -- is expecting and we aren't already at the top. Otherwise return Nothing.
+-- | Move up n levels as long as the type of the parent is what the programmer
+-- is expecting and we aren't already at the top. Otherwise return Nothing.
 moveUp :: (Typeable c, Typeable b)=> Int -> Zipper a c -> Maybe (Zipper a b)
 moveUp 0  z                        = gcast z
 moveUp n (Z (Cons (H _ f) stck) c) = moveUp (n-1) (Z stck $ f c)
@@ -162,8 +162,8 @@ close = snd . closeSaving
 --- 'moveUP' DEFINED IN TERMS OF IT, BUT FOR NOW I AM HAPPY WITH SOMETHING THAT
 --- WORKS. 
 
- -- | Move up a level as long as the type of the parent is what the programmer
- -- is expecting and we aren't already at the top. Otherwise return Nothing.
+-- | Move up a level as long as the type of the parent is what the programmer
+-- is expecting and we aren't already at the top. Otherwise return Nothing.
 moveUpSaving :: (Typeable c, Typeable b)=> Int -> Zipper a c -> Maybe (Zipper a b, SavedPath b c)
 moveUpSaving n z = (,) <$> moveUp n z <*> saveFromAbove n z
 
@@ -171,7 +171,7 @@ data ZipperLenses a c b = ZL { zlStack :: ZipperStack b a,
                                zLenses :: Thrist TypeableLens b c }
 
 
- -- | return a SavedPath from n levels up to the current level
+-- | return a SavedPath from n levels up to the current level
 saveFromAbove n = fmap (S . zLenses) . mvUpSavingL n . flip ZL Nil . stack
     where
         mvUpSavingL :: (Typeable b', Typeable b)=> Int -> ZipperLenses a c b -> Maybe (ZipperLenses a c b')
@@ -217,7 +217,6 @@ atTop = nullThrist . stack
 level :: Zipper a b -> Int
 level = foldlThrist (.) ...forgot how to do this :(
 -}
-
 ----------------------------------------------------------------------------
 
 
