@@ -1,5 +1,5 @@
 Name:                pez
-Version:             0.0.2
+Version:             0.0.3
 Synopsis:            A Potentially-Excellent Zipper library
 Homepage:            http://coder.bsimmons.name/blog/2011/04/pez-zipper-library-released/
 
@@ -14,7 +14,8 @@ Description:         PEZ is a generic zipper library. It uses lenses from the 'f
                      First import the library, which brings in the Typeable and fclabels modules.
                      You will also want to enable a few extensions:
                      .
-                     > {-# LANGUAGE TemplateHaskell, DeriveDataTypeable, TypeOperators #-}
+                     > -- Put these in a LANGUAGE pragma:
+                     > -- TemplateHaskell, DeriveDataTypeable, TypeOperators 
                      > module Main where
                      >
                      > import Data.Typeable.Zipper
@@ -22,11 +23,12 @@ Description:         PEZ is a generic zipper library. It uses lenses from the 'f
                      Create a datatype, deriving an instance of the Typeable class, and generate a
                      lens using functions from fclabels:
                      .
-                     > data Tree a = Node { _leftNode :: Tree a, 
-                     >                      _val      :: a, 
-                     >                      _rightNode :: Tree a }
-                     >             | Nil  
-                     >             deriving (Typeable,Show)
+                     > data Tree a = Node { 
+                     >     _leftNode :: Tree a
+                     >   , _val      :: a 
+                     >   , _rightNode :: Tree a }
+                     >   | Nil  
+                     >   deriving (Typeable,Show)
                      >
                      > $(mkLabelsNoTypes [''Tree])
                      .
