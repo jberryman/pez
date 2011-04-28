@@ -66,6 +66,7 @@ module Data.Typeable.Zipper (
  -   ROADMAP:
  -    Pink Elephant
  -    Patiently Expectant
+ -    Pretty Extraordinary
  -    Probably ??
  -
  -}
@@ -177,6 +178,7 @@ data ZipperLenses a c b = ZL { zlStack :: ZipperStack b a,
 
 
 -- | return a SavedPath from n levels up to the current level
+saveFromAbove :: (Typeable c, Typeable b) => Int -> Zipper a c -> Maybe (SavedPath b c)
 saveFromAbove n = fmap (S . zLenses) . mvUpSavingL n . flip ZL Nil . stack
     where
         mvUpSavingL :: (Typeable b', Typeable b)=> Int -> ZipperLenses a c b -> Maybe (ZipperLenses a c b')
@@ -288,6 +290,8 @@ compStack = foldrThrist (flip(.)) id
  -- them in reversed order, forming a lens from top to bottom of a data 
  -- structure:
 getReverseLensStack :: ZipperStack b a -> Thrist TypeableLens a b
-getReverseLensStack = unflip . foldlThrist rev (Flipped Nil)
-    where rev (Flipped t) (H l _) = Flipped $ Cons (TL l) t
-
+getReverseLensStack = unflip . foldlThrist revLocal (Flipped Nil)
+    --where rev (Flipped t) (H l _) = Flipped $ Cons (TL l) t
+-- MAKING THIS GLOBAL SHOULD PLEASE GHC 7.0 WITHOUT EXTRA EXTENSIONS. SEE:
+--      http://hackage.haskell.org/trac/ghc/blog/LetGeneralisationInGhc7
+revLocal (Flipped t) (H l _) = Flipped $ Cons (TL l) t
