@@ -93,4 +93,4 @@ Library
                    , DeriveDataTypeable
   
   -- Modules not exported by this package.
-  Other-modules:     Data.Record.Label.Prelude  
+  --Other-modules:     Data.Record.Label.Prelude  

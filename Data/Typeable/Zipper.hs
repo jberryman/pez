@@ -26,7 +26,7 @@ module Data.Typeable.Zipper (
     , Zipper1
     -- ** Operators
     , (.+) , (.>) , (.-) , (?+) , (?>) , (?-)
-    -- ** Export Typeable class and fclabels package
+    -- ** Export Typeable class and "fclabels" package
     , module Data.Record.Label
     , Data.Typeable.Typeable     
 ) where
@@ -43,21 +43,25 @@ module Data.Typeable.Zipper (
  -
  - TODO NOTES
  -
- -   - Include as part of package a module: Data.Record.Label.Prelude that
- -   exports labels for haskell builtin types
- -
- -   - Create a 'moveUntil' function, or something else to capture the ugly:
- -          descend z@(viewf -> Gong) = z
- -          descend z                 = descend $ moveTo tock z
- -    ...perhaps we can make something clever using property of pattern match
- -     failure in 'do' block?
- -
  -   - When the 'fclabels' package supports failure handling a.la the code on
  -   Github, then these functions will take advantage of that by returning
  -   Nothing when a lens is applied to an invalid constructor:
  -       * moveTo
  -       * restore
  -   
+ -   - look at usability and re-define/remove/add functions as needed, e.g.:
+ -       - Create a 'moveUntil' function, or something else to capture the ugly:
+ -              descend z@(viewf -> Gong) = z
+ -              descend z                 = descend $ moveTo tock z
+ -         ...perhaps we can make something clever using property of pattern match
+ -         failure in 'do' block?
+ -       - experiments with state monad interface?
+ -
+ -   - Separate module: Data.Record.Label.Prelude that
+ -   exports labels for haskell builtin types. Ask S. V. if he wantd to include
+ -   it with fclabels.
+ -
+ -
  -   - consider instead of using section, use head form of parent with
  -   the child node set to undefined. Any performance difference?
  -
@@ -118,10 +122,10 @@ data TypeableLens a b where
 -- CONSTRAINTS HERE:
 --class (Typeable b, Typeable c) => ZPath p b c | p -> b, p -> c where
 --
--- | Types of the ZPath class act as references to "paths" down through a datatype.
--- Currently lenses from 'fclabels' and SavedPath types are instances
+-- | Types of the ZPath class act as references to \"paths\" down through a datatype.
+-- Currently lenses from "fclabels" and 'SavedPath' types are instances
 class ZPath p where
-    -- | Move down the structure to the label specified. Return Nothing if the
+    -- | Move down the structure to the label specified. Return 'Nothing' if the
     -- label is not valid for the focus's constructor:
     moveTo :: (Typeable b, Typeable c) => p b c -> Zipper a b -> Zipper a c
 
@@ -132,7 +136,7 @@ class ZPath p where
     ---------------------------
 
 
--- | a fclabel lens for setting, getting, and modifying the zipper's focus:
+-- | a "fclabels" lens for setting, getting, and modifying the zipper's focus:
 $(mkLabelsNoTypes [''Zipper])
 
 
@@ -144,7 +148,7 @@ instance ZPath SavedPath where
 
 
 -- | Move up n levels as long as the type of the parent is what the programmer
--- is expecting and we aren't already at the top. Otherwise return Nothing.
+-- is expecting, and we aren't already at the top. Otherwise return 'Nothing'.
 moveUp :: (Typeable c, Typeable b)=> Int -> Zipper a c -> Maybe (Zipper a b)
 moveUp 0  z                        = gcast z
 moveUp n (Z (Cons (H _ f) stck) c) = moveUp (n-1) (Z stck $ f c)
@@ -154,7 +158,9 @@ moveUp _  _                        = Nothing
 zipper :: a -> Zipper a a
 zipper = Z Nil
 
-
+-- | re-assembles the data structure from the top level
+--
+-- > close = snd . closeSaving
 close :: Zipper a b -> a
 close = snd . closeSaving
 
@@ -177,7 +183,7 @@ data ZipperLenses a c b = ZL { zlStack :: ZipperStack b a,
                                zLenses :: Thrist TypeableLens b c }
 
 
--- | return a SavedPath from n levels up to the current level
+-- | return a 'SavedPath' from n levels up to the current level
 saveFromAbove :: (Typeable c, Typeable b) => Int -> Zipper a c -> Maybe (SavedPath b c)
 saveFromAbove n = fmap (S . zLenses) . mvUpSavingL n . flip ZL Nil . stack
     where
@@ -194,33 +200,38 @@ closeSaving (Z stck b) = (S ls, a)
           a  = compStack (mapThrist hCont stck) b
 
 
--- | Return a SavedPath type encapsulating the current location in the Zipper.
+-- | Return a 'SavedPath' type encapsulating the current location in the 'Zipper'.
 -- This lets you return to a location in your data type after closing the 
 -- Zipper.
+--
+-- > save = fst . closeSaving
 save :: Zipper a b -> SavedPath a b
 save = fst . closeSaving
 
--- | Extract a composed lens that points to the location we SavedPath. This lets 
--- us modify, set or get a location that we visited with our Zipper after 
+-- | Extract a composed lens that points to the location we saved. This lets 
+-- us modify, set or get a location that we visited with our 'Zipper' after 
 -- closing the Zipper.
 savedLens :: (Typeable a, Typeable b)=> SavedPath a b -> (a :-> b)
 savedLens = compStack . mapThrist tLens . savedLenses
 
 
--- | Return to a previously SavedPath location within a data-structure. 
+-- | Return to a previously 'SavedPath' location within a data-structure. 
+--
 -- Saving and restoring lets us for example: find some location within our 
--- structure using a Zipper, save the location, fmap over the entire structure,
--- and then return to where we were:
+-- structure using a 'Zipper', save the location, 'fmap' over the entire structure,
+-- and then return to where we were.
+--
+-- > restore s = moveTo s  . zipper
 restore :: (ZPath p, Typeable a, Typeable b)=> p a b -> a -> Zipper a b
 restore s = moveTo s  . zipper
 
 
--- | returns True if Zipper is at the top level of the data structure:
+-- | returns 'True' if 'Zipper' is at the top level of the data structure:
 atTop :: Zipper a b -> Bool
 atTop = nullThrist . stack
 
 {-
--- | Return our depth in the Zipper. if atTop z then level z == 0
+-- | Return our depth in the 'Zipper'. if 'atTop' z then 'level' z == 0
 level :: Zipper a b -> Int
 level = foldlThrist (.) ...forgot how to do this :(
 -}
@@ -231,11 +242,13 @@ level = foldlThrist (.) ...forgot how to do this :(
     -- CONVENIENCE
     ----------------
 
--- | a view function for a Zipper's focus. Defined simply as: `getL` focus
+-- | a view function for a 'Zipper'\'s focus.
+--
+-- > viewf = getL focus
 viewf :: Zipper a b -> b
 viewf = getL focus
 
--- | a simple type synonym for a Zipper where the type at the focus is the
+-- | a simple type synonym for a 'Zipper' where the type at the focus is the
 -- same as the type of the outer (unzippered) type. Cleans up type signatures
 -- for simple recursive types:
 type Zipper1 a = Zipper a a
@@ -254,12 +267,12 @@ infixl 5 .+, .>, .-, ?+, ?>, ?-
 (.-) :: (Typeable c, Typeable b)=> Zipper a c -> Int -> Maybe (Zipper a b)
 (.-) = flip moveUp
 
--- | setL focus, with arguments flipped
+-- | 'setL' 'focus', with arguments flipped
 (.>) :: Zipper a b -> b -> Zipper a b
 (.>) = flip (setL focus)
 
 (?+) :: (ZPath p, Typeable b, Typeable c)=> Maybe (Zipper a b) -> p b c -> Maybe (Zipper a c)
-(?+)= flip (fmap . moveTo)
+(?+) = flip (fmap . moveTo)
 
 (?-) :: (Typeable c, Typeable b)=> Maybe (Zipper a c) -> Int -> Maybe (Zipper a b)
 mz ?- n = mz >>= moveUp n
