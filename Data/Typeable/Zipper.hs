@@ -1,6 +1,60 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, TypeOperators, TemplateHaskell, 
 GADTs, DeriveDataTypeable #-}
+
+{- |
+PEZ is a generic zipper library. It uses lenses from the "fclabels" package to
+reference a \"location\" to move to in the zipper. The zipper is restricted to
+types in the 'Typeable' class, allowing the user to \"move up\" through complex data
+structures such as mutually-recursive types.
+.
+Both the Typeable class and "fclabels" lenses can be derived in GHC, making it
+easy for the programmer to use a zipper with a minimum of boilerplate.
+-}
+
 module Data.Typeable.Zipper (
+    -- * Usage
+    {- |
+     First import the library, which brings in the Typeable and "fclabels" modules.
+     You will also want to enable a few extensions:
+      
+     > -- {-# LANGUAGE TemplateHaskell, DeriveDataTypeable, TypeOperators #-}
+     > module Main where
+     >
+     > import Data.Typeable.Zipper
+      
+     Create a datatype, deriving an instance of the Typeable class, and generate a
+     lens using functions from fclabels:
+      
+     > data Tree a = Node { 
+     >     _leftNode :: Tree a
+     >   , _val      :: a 
+     >   , _rightNode :: Tree a }
+     >   | Nil  
+     >   deriving (Typeable,Show)
+     >
+     > $(mkLabelsNoTypes [''Tree])
+      
+     Now we can go crazy using Tree in a 'Zipper':
+      
+     > treeBCD = Node (Node Nil 'b' Nil) 'c' (Node Nil 'd' Nil)
+     > 
+     > descendLeft :: Zipper1 (Tree a) -> Zipper1 (Tree a)
+     > descendLeft z = case (viewf z) of
+     >                      Nil -> z
+     >                      _   -> descendLeft $ moveTo leftNode z
+     >
+     > insertLeftmost :: a -> Tree a -> Tree a
+     > insertLeftmost x = close . setL focus x . descendLeft . zipper
+     >
+     > treeABCD = insertLeftmost 'a' treeBCD
+      
+     Because of the flexibility of "fclabels", this zipper library can be used to
+     express moving about in reversible computations simply by defining such a lens,
+     for instance:
+      
+     > stringRep :: (Show b, Read b) => b :-> String
+     > stringRep = lens show (const . read)
+    -}
 
     -- * Basic Zipper functionality
       Zipper() 
@@ -32,7 +86,7 @@ module Data.Typeable.Zipper (
 ) where
 
 {- 
- -   DESCRIPTION:
+ -   IMPLEMENTATION NOTES:
  -
  -   we use a Thrist to create a type-threaded stack of continuations
  -   allowing us to have a polymorphic history of where we've been.
@@ -41,7 +95,7 @@ module Data.Typeable.Zipper (
  -   what type a move up will produce, or deal with unknowns.
  -
  -
- - TODO NOTES
+ -   TODO NOTES
  -
  -   - When the 'fclabels' package supports failure handling a.la the code on
  -   Github, then these functions will take advantage of that by returning
@@ -267,7 +321,7 @@ infixl 5 .+, .>, .-, ?+, ?>, ?-
 (.-) :: (Typeable c, Typeable b)=> Zipper a c -> Int -> Maybe (Zipper a b)
 (.-) = flip moveUp
 
--- | 'setL' 'focus', with arguments flipped
+-- | @'setL' 'focus'@, with arguments flipped
 (.>) :: Zipper a b -> b -> Zipper a b
 (.>) = flip (setL focus)
 
