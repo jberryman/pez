@@ -102,6 +102,8 @@ module Data.Typeable.Zipper (
  -   Nothing when a lens is applied to an invalid constructor:
  -       * moveTo
  -       * restore
+ -
+ -   - see if Zipper monad looks more attractive now w/ partial types.
  -   
  -   - look at usability and re-define/remove/add functions as needed, e.g.:
  -       - Create a 'moveUntil' function, or something else to capture the ugly:
@@ -109,12 +111,13 @@ module Data.Typeable.Zipper (
  -              descend z                 = descend $ moveTo tock z
  -         ...perhaps we can make something clever using property of pattern match
  -         failure in 'do' block?
- -       - experiments with state monad interface?
+ -         - SEE IF ArrowChoice MIGHT GET US CLOSE TO WHAT WE WANT
+ -       - experiments with state monad interface (see above)
+ -
  -
  -   - Separate module: Data.Record.Label.Prelude that
  -   exports labels for haskell builtin types. Ask S. V. if he wantd to include
  -   it with fclabels.
- -
  -
  -   - consider instead of using section, use head form of parent with
  -   the child node set to undefined. Any performance difference?
@@ -172,9 +175,14 @@ data TypeableLens a b where
 
 
 
--- TODO: TRY USING FUNDEPS ALA THE MONAD TRANSFORMER LIBRARIES FOR CLASS
--- CONSTRAINTS HERE:
---class (Typeable b, Typeable c) => ZPath p b c | p -> b, p -> c where
+-- TODO: make this return Maybe, make instances be 
+  -- :: (Control.Arrow.ArrowZero (~>)
+  --     Control.Arrow.ArrowChoice (~>)) =>
+  --       Lens (~>) a b
+-- in addition to SavedPath.
+--
+-- Then create a separate function:
+--   moveTo' :: (Typeable b, Typeable c)=> (b :-> c) -> Zipper a b -> Zipper a c
 --
 -- | Types of the ZPath class act as references to \"paths\" down through a datatype.
 -- Currently lenses from "fclabels" and 'SavedPath' types are instances
@@ -190,8 +198,11 @@ class ZPath p where
     ---------------------------
 
 
+
+-- TODO: DEFINE THIS LENS BY HAND TO GET NICER NAMES
+--
 -- | a "fclabels" lens for setting, getting, and modifying the zipper's focus:
-$(mkLabelsNoTypes [''Zipper])
+$(mkLabels [''Zipper])
 
 
 instance ZPath (:->) where
@@ -268,6 +279,8 @@ save = fst . closeSaving
 savedLens :: (Typeable a, Typeable b)=> SavedPath a b -> (a :-> b)
 savedLens = compStack . mapThrist tLens . savedLenses
 
+
+-- TODO: this will return Maybe (Zipper a b)
 
 -- | Return to a previously 'SavedPath' location within a data-structure. 
 --
