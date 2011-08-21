@@ -1,6 +1,6 @@
 Name:                pez
-Version:             0.0.4
-Synopsis:            A Potentially-Excellent Zipper library
+Version:             0.1.0
+Synopsis:            A Pretty Extraordinary Zipper library
 Homepage:            http://coder.bsimmons.name/blog/2011/04/pez-zipper-library-released/
 
 Description:         PEZ is a generic zipper library. It uses lenses from the "fclabels" package to
@@ -41,7 +41,7 @@ Library
   
   -- Packages needed in order to build this package.
   Build-depends:       base >= 4 && < 5
-                     , fclabels >= 0.11.1.1 && < 0.12
+                     , fclabels >= 1.0
                      , thrist >= 0.2 && < 0.3
 
   Extensions:        GeneralizedNewtypeDeriving
