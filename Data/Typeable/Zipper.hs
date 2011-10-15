@@ -78,10 +78,12 @@ module Data.Typeable.Zipper (
 
     -- * Convenience operators, types, and exports
     , Zipper1
+    {-
     -- ** Operators
     , (.+) , (.>) , (.-) , (?+) , (?>) , (?-)
+    -}
     -- ** Export Typeable class and "fclabels" package
-    , module Data.Record.Label
+    , module Data.Label
     , Data.Typeable.Typeable     
 ) where
 
@@ -126,14 +128,14 @@ module Data.Typeable.Zipper (
  -
  -   ROADMAP:
  -    Pink Elephant
+ -    Placebo Effect
  -    Patiently Expectant
- -    Pretty Extraordinary
  -    Probably ??
  -
  -}
 
  -- this is where the magic happens:
-import Data.Record.Label
+import Data.Label
 import Data.Typeable
 import Data.Thrist
 
@@ -198,9 +200,6 @@ class ZPath p where
     ---------------------------
 
 
-
--- TODO: DEFINE THIS LENS BY HAND TO GET NICER NAMES
---
 -- | a "fclabels" lens for setting, getting, and modifying the zipper's focus:
 $(mkLabels [''Zipper])
 
@@ -321,6 +320,7 @@ viewf = getL focus
 type Zipper1 a = Zipper a a
 
 
+{-
 -- bind higher than <$>. Is this acceptable?:
 infixl 5 .+, .>, .-, ?+, ?>, ?-
 
@@ -346,7 +346,7 @@ mz ?- n = mz >>= moveUp n
 
 (?>) :: Maybe (Zipper a b) -> b -> Maybe (Zipper a b)
 (?>) = flip (fmap . setL focus)
-
+-}
 
     ------------
     -- HELPERS

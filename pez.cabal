@@ -12,6 +12,12 @@ Description:         PEZ is a generic zipper library. It uses lenses from the "f
                      easy for the programmer to use a zipper with a minimum of boilerplate.
                      .
                      Please send any feature requests or bug reports along.
+                     .
+                     Changes 0.0.4 -> 0.1.0:
+                     >  - 'ZPath' renamed 'Motion', (Up Int) is an instance
+                     >  - 'moveTo' changed to 'move'
+                     >  - zipper operations in Maybe by default
+                     >  - use fclabels 1.0
  
 
 License:             BSD3
