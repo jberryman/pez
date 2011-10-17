@@ -296,7 +296,8 @@ close = snd . closeSaving
 
 -- | Move up @n@ levels as long as the type of the parent is what the programmer
 -- is expecting and we aren't already at the top. Otherwise return Nothing.
-moveUpSaving :: (Typeable c, Typeable b)=> Int -> Zipper a c -> Maybe (Zipper a b, SavedPath b c)
+moveUpSaving :: (Typeable c, Typeable b)=> 
+                    Int -> Zipper a c -> Maybe (Zipper a b, SavedPath b c)
 moveUpSaving n z = (,) <$> move (Up n) z <*> saveFromAbove n z
 
 data ZipperLenses a c b = ZL { zlStack :: ZipperStack b a,
@@ -304,14 +305,16 @@ data ZipperLenses a c b = ZL { zlStack :: ZipperStack b a,
 
 
 -- | return a 'SavedPath' from n levels up to the current level
-saveFromAbove :: (Typeable c, Typeable b) => Int -> Zipper a c -> Maybe (SavedPath b c)
+saveFromAbove :: (Typeable c, Typeable b) => 
+                    Int -> Zipper a c -> Maybe (SavedPath b c)
 saveFromAbove n = fmap (S . zLenses) . mvUpSavingL n . flip ZL Nil . stack
     where
-        mvUpSavingL :: (Typeable b', Typeable b)=> Int -> ZipperLenses a c b -> Maybe (ZipperLenses a c b')
-        mvUpSavingL 0 z                     = gcast z
-        mvUpSavingL n (ZL (Cons (H l _) stck) ls) = mvUpSavingL (n-1) (ZL stck $ Cons (TL l) ls)
-        --mvUpSavingL n (ZL (Cons h stck) ls) = mvUpSavingL (n-1) (ZL stck $ Cons (TL $ hLens h) ls)
-        mvUpSavingL _ _                     = Nothing
+        mvUpSavingL :: (Typeable b', Typeable b)=> 
+                        Int -> ZipperLenses a c b -> Maybe (ZipperLenses a c b')
+        mvUpSavingL 0 z = gcast z
+        mvUpSavingL n' (ZL (Cons (H l _) stck) ls) = 
+                          mvUpSavingL (n'-1) (ZL stck $ Cons (TL l) ls)
+        mvUpSavingL _ _ = Nothing
 
 
 
