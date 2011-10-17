@@ -12,7 +12,7 @@ Both the Typeable class and "fclabels" lenses can be derived in GHC, making it
 easy for the programmer to use a zipper with a minimum of boilerplate.
 -}
 
-module Data.Typeable.Zipper (
+module Data.Label.Zipper (
     -- * Usage
     {- |
      First import the library, which brings in the Typeable and "fclabels" modules.
