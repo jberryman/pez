@@ -1,5 +1,6 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, TypeOperators, TemplateHaskell, 
-GADTs, DeriveDataTypeable #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, TypeOperators, TemplateHaskell,
+GADTs, DeriveDataTypeable, 
+FlexibleInstances #-}
 
 {- |
 PEZ is a generic zipper library. It uses lenses from the "fclabels" package to
@@ -41,7 +42,7 @@ module Data.Typeable.Zipper (
      > descendLeft :: Zipper1 (Tree a) -> Zipper1 (Tree a)
      > descendLeft z = case (viewf z) of
      >                      Nil -> z
-     >                      _   -> descendLeft $ moveTo leftNode z
+     >                      _   -> descendLeft $ move leftNode z
      >
      > insertLeftmost :: a -> Tree a -> Tree a
      > insertLeftmost x = close . setL focus x . descendLeft . zipper
@@ -58,12 +59,38 @@ module Data.Typeable.Zipper (
 
     -- * Basic Zipper functionality
       Zipper() 
+    {- |
+       /A note on failure in zipper operations:/
+
+       Most operations on a 'Zipper' return a result of the Maybe type, for 
+       various types of failures. Here is a list of failure scenarios:
+
+         - a 'move' Up arrives at a type that could not be cast to the type
+           expected
+
+         - a @move (Up 1)@ when already 'atTop', i.e. we cannot ascend anymore
+
+         - a @move@ to a label (e.g. @foo :: FooBar :~> FooBar@) causes a
+           failure in the getter function of the lens, usually because the 
+           'focus' was the wrong constructor for the lens
+
+         - a @move (Up n)@ causes the /setter/ of the lens we used to arrive at
+           the current focus to fail on the value of the current focus. This 
+           is not something that happens for normal lenses, but is desirable 
+           for structures that enforce extra-type-system constraints. 
+
+         - a 'close' cannot re-build the structure because some setter failed,
+           as above. Again, this does not occur for TH'generated lenses.
+
+    -}
     -- ** Creating and closing Zippers
     , zipper , close
     -- ** Moving around
-    , ZPath(..) , moveUp
+    , Motion(..) , Up(..)
     -- ** Querying
-    , focus , viewf , atTop       
+    -- | a "fclabels" lens for setting, getting, and modifying the zipper's focus:
+    , focus 
+    , viewf , atTop       
 
     -- * Advanced functionality
     -- ** Saving positions in a Zipper
@@ -136,33 +163,56 @@ module Data.Typeable.Zipper (
 
  -- this is where the magic happens:
 import Data.Label
+import qualified Data.Label.Maybe as M
+import qualified Data.Label.Abstract as A
 import Data.Typeable
 import Data.Thrist
 
  -- for our accessors, which are a category:
 import Control.Category         
-import Prelude hiding ((.), id) -- take these from Control.Category
+import Prelude hiding ((.), id)
 import Control.Applicative
-
+import Control.Arrow(Kleisli(..))
+-- these required for creating a Motion instance for lenses:
+import Control.Monad.Identity
+import Control.Monad.Trans.Maybe
 
     -------------------------
     -- TYPES: the real heros
     ------------------------
 
+{- *
+ - It's interesting to note in our :~> lenses the setter also can fail, and can
+ - fail based not only on the constructor 'f' but also for certain values of 'a'
+ - This is kind of interesting; it lets lenses enforce constraints on a type
+ - that the type system cannot, e.g. Foo Int, where Int must always be odd.
+ -
+ - So a module might export a type with hidden constructors and only lenses for
+ - an interface. Our zipper could navigate around in the type, and all the
+ - constraints would still be enforced on the unzippered type. Cool!
+-}
 
  -- We store our history in a type-threaded list of pairs of lenses and
- -- continuations (parent data-types with a "hole" where the child fits):
- --    Use GADT to enforce Typeable constraint
+ -- continuations (parent data-types with a "hole" where the child fits), the
+ -- lenses are kept around so that we can extract the "path" to the current
+ -- focus and apply it to other data types. Use GADT to enforce Typeable.
 data HistPair b a where 
-    H :: (Typeable a, Typeable b)=> { hLens :: (a :-> b),
-                                      hCont :: (b -> a) } -> HistPair b a
+    H :: (Typeable a, Typeable b)=> 
+                { hLens :: (a M.:~> b)
+                , hCont :: Kleisli Maybe b a -- *see above
+                } -> HistPair b a
 
 type ZipperStack b a = Thrist HistPair b a
 
-data Zipper a b = Z { stack  :: ZipperStack b a,
-                      _focus :: b                                  
+-- TODO: this could be a contravariant functor, no?:
+--
+data Zipper a b = Z { stack  :: ZipperStack b a
+                    , _focus :: b                                  
                     } deriving (Typeable)
     
+
+-- TODO: when new 'thrist' supports arbitrary Arrow instance, we can derive
+-- Arrow and ArrowChoice / ArrowZero here:
 
 -- | stores the path used to return to the same location in a data structure
 -- as the one we just exited. You can also extract a lens from a SavedPath that
@@ -173,7 +223,8 @@ newtype SavedPath a b = S { savedLenses :: Thrist TypeableLens a b }
 -- We need another GADT here to enforce the Typeable constraint within the
 -- hidden types in our thrist of lenses above:
 data TypeableLens a b where
-    TL :: (Typeable a,Typeable b)=> {tLens :: (a :-> b)} -> TypeableLens a b
+    TL :: (Typeable a,Typeable b)=> { tLens :: (a M.:~> b)
+                                    } -> TypeableLens a b
 
 
 
@@ -184,48 +235,54 @@ data TypeableLens a b where
 -- in addition to SavedPath.
 --
 -- Then create a separate function:
---   moveTo' :: (Typeable b, Typeable c)=> (b :-> c) -> Zipper a b -> Zipper a c
+--   move' :: (Typeable b, Typeable c)=> (b :-> c) -> Zipper a b -> Zipper a c
 --
--- | Types of the ZPath class act as references to \"paths\" down through a datatype.
--- Currently lenses from "fclabels" and 'SavedPath' types are instances
-class ZPath p where
-    -- | Move down the structure to the label specified. Return 'Nothing' if the
-    -- label is not valid for the focus's constructor:
-    moveTo :: (Typeable b, Typeable c) => p b c -> Zipper a b -> Zipper a c
+-- | Types of the Motion class act as references to \"paths\" up or down 
+-- through a datatype.
+class Motion p where
+    -- | Move through the structure to the label specified, returning 'Nothing'
+    -- if the motion is invalid.
+    move :: (Typeable b, Typeable c) => p b c -> Zipper a b -> Maybe (Zipper a c)
 
-
+-- | a 'Motion' upwards in the data type. e.g. @move (Up 2)@ would move up to
+-- the grandparent level, as long as the type of the focus after the motion is 
+-- @b@.
+newtype Up c b = Up Int
 
     ---------------------------
     -- Basic Zipper Functions:
     ---------------------------
 
 
--- | a "fclabels" lens for setting, getting, and modifying the zipper's focus:
 $(mkLabels [''Zipper])
 
 
-instance ZPath (:->) where
-    moveTo = flip pivot . TL
+-- this is (:~>) from fclabels. An alternative is to create a newtype wrapper:
+instance Motion (A.Lens (Kleisli (MaybeT Identity))) where
+    move = flip pivot . TL
 
-instance ZPath SavedPath where
-    moveTo = flip (foldlThrist pivot) . savedLenses  
+instance Motion SavedPath where
+    move = flip (foldMThrist pivot) . savedLenses  
+
+-- TODO: maybe Up can derive a Num instance??
+instance Motion Up where
+    move (Up 0)  z                  = gcast z
+    move (Up n) (Z (Cons (H _ k) stck) c) = runKleisli k c >>= move (Up (n-1)) . Z stck
+    move _  _                       = Nothing  
 
 
--- | Move up n levels as long as the type of the parent is what the programmer
--- is expecting, and we aren't already at the top. Otherwise return 'Nothing'.
-moveUp :: (Typeable c, Typeable b)=> Int -> Zipper a c -> Maybe (Zipper a b)
-moveUp 0  z                        = gcast z
-moveUp n (Z (Cons (H _ f) stck) c) = moveUp (n-1) (Z stck $ f c)
-moveUp _  _                        = Nothing  
-
-
+-- | create a zipper with the focus on the top level.
 zipper :: a -> Zipper a a
 zipper = Z Nil
 
--- | re-assembles the data structure from the top level
+-- | re-assembles the data structure from the top level, returning @Nothing@ if
+-- the structure cannot be re-assembled.
 --
--- > close = snd . closeSaving
-close :: Zipper a b -> a
+-- /Note/: For standard lenses produced with 'mkLabels' this will never fail. 
+-- However setters can be used to enforce arbitrary constraints on a data 
+-- structure, e.g. thata type @Odd Int@ can only hold an odd integer. This
+-- function returns @Nothing@ in such cases.
+close :: Zipper a b -> Maybe a
 close = snd . closeSaving
 
 
@@ -234,14 +291,13 @@ close = snd . closeSaving
     -- ADVANCED ZIPPER FUNCTIONS:
     ------------------------------
 
---- THIS FUNCTION GAVE ME THE MOST TROUBLE AND COULD PROBABLY BE SIMPLIFIED AND
---- 'moveUP' DEFINED IN TERMS OF IT, BUT FOR NOW I AM HAPPY WITH SOMETHING THAT
---- WORKS. 
+-- TODO: this could sort of be polymorphic over Motion but that wouldn't really
+-- have much meaning for moving down (would return the lens we passed)
 
--- | Move up a level as long as the type of the parent is what the programmer
+-- | Move up @n@ levels as long as the type of the parent is what the programmer
 -- is expecting and we aren't already at the top. Otherwise return Nothing.
 moveUpSaving :: (Typeable c, Typeable b)=> Int -> Zipper a c -> Maybe (Zipper a b, SavedPath b c)
-moveUpSaving n z = (,) <$> moveUp n z <*> saveFromAbove n z
+moveUpSaving n z = (,) <$> move (Up n) z <*> saveFromAbove n z
 
 data ZipperLenses a c b = ZL { zlStack :: ZipperStack b a,
                                zLenses :: Thrist TypeableLens b c }
@@ -252,16 +308,22 @@ saveFromAbove :: (Typeable c, Typeable b) => Int -> Zipper a c -> Maybe (SavedPa
 saveFromAbove n = fmap (S . zLenses) . mvUpSavingL n . flip ZL Nil . stack
     where
         mvUpSavingL :: (Typeable b', Typeable b)=> Int -> ZipperLenses a c b -> Maybe (ZipperLenses a c b')
-        mvUpSavingL 0 z                           = gcast z
+        mvUpSavingL 0 z                     = gcast z
         mvUpSavingL n (ZL (Cons (H l _) stck) ls) = mvUpSavingL (n-1) (ZL stck $ Cons (TL l) ls)
-        mvUpSavingL _ _                           = Nothing
+        --mvUpSavingL n (ZL (Cons h stck) ls) = mvUpSavingL (n-1) (ZL stck $ Cons (TL $ hLens h) ls)
+        mvUpSavingL _ _                     = Nothing
 
 
 
-closeSaving :: Zipper a b -> (SavedPath a b, a)
-closeSaving (Z stck b) = (S ls, a)
+-- TODO: THIS HAS TO RETURN Maybe, SEE COMPSTACK
+
+-- | Close the zipper, returning the saved path back down to the zipper\'s
+-- focus. See 'close'
+closeSaving :: Zipper a b -> (SavedPath a b, Maybe a)
+closeSaving (Z stck b) = (S ls, ma)
     where ls = getReverseLensStack stck
-          a  = compStack (mapThrist hCont stck) b
+          kCont = compStack $ mapThrist hCont stck
+          ma = runKleisli kCont b
 
 
 -- | Return a 'SavedPath' type encapsulating the current location in the 'Zipper'.
@@ -275,21 +337,20 @@ save = fst . closeSaving
 -- | Extract a composed lens that points to the location we saved. This lets 
 -- us modify, set or get a location that we visited with our 'Zipper' after 
 -- closing the Zipper.
-savedLens :: (Typeable a, Typeable b)=> SavedPath a b -> (a :-> b)
+savedLens :: (Typeable a, Typeable b)=> SavedPath a b -> (a M.:~> b)
 savedLens = compStack . mapThrist tLens . savedLenses
 
-
--- TODO: this will return Maybe (Zipper a b)
 
 -- | Return to a previously 'SavedPath' location within a data-structure. 
 --
 -- Saving and restoring lets us for example: find some location within our 
 -- structure using a 'Zipper', save the location, 'fmap' over the entire structure,
--- and then return to where we were.
+-- and then return to where we were safely, even if the \"shape\" of our
+-- structure has changed.
 --
--- > restore s = moveTo s  . zipper
-restore :: (ZPath p, Typeable a, Typeable b)=> p a b -> a -> Zipper a b
-restore s = moveTo s  . zipper
+-- > restore s = move s . zipper
+restore :: (Motion p, Typeable a, Typeable b)=> p a b -> a -> Maybe (Zipper a b)
+restore s = move s . zipper
 
 
 -- | returns 'True' if 'Zipper' is at the top level of the data structure:
@@ -312,7 +373,7 @@ level = foldlThrist (.) ...forgot how to do this :(
 --
 -- > viewf = getL focus
 viewf :: Zipper a b -> b
-viewf = getL focus
+viewf = get focus
 
 -- | a simple type synonym for a 'Zipper' where the type at the focus is the
 -- same as the type of the outer (unzippered) type. Cleans up type signatures
@@ -324,10 +385,10 @@ type Zipper1 a = Zipper a a
 -- bind higher than <$>. Is this acceptable?:
 infixl 5 .+, .>, .-, ?+, ?>, ?-
 
--- | 'moveTo' with arguments flipped. Operator plays on the idea of addition of
+-- | 'move' with arguments flipped. Operator plays on the idea of addition of
 -- levels onto the focus.
-(.+) :: (ZPath p, Typeable b, Typeable c)=> Zipper a b -> p b c -> Zipper a c
-(.+) = flip moveTo
+(.+) :: (Motion p, Typeable b, Typeable c)=> Zipper a b -> p b c -> Zipper a c
+(.+) = flip move
 
 -- | 'moveUp' with arguments flipped. Operator syntax comes from the idea of
 -- moving up as subtraction.
@@ -338,8 +399,8 @@ infixl 5 .+, .>, .-, ?+, ?>, ?-
 (.>) :: Zipper a b -> b -> Zipper a b
 (.>) = flip (setL focus)
 
-(?+) :: (ZPath p, Typeable b, Typeable c)=> Maybe (Zipper a b) -> p b c -> Maybe (Zipper a c)
-(?+) = flip (fmap . moveTo)
+(?+) :: (Motion p, Typeable b, Typeable c)=> Maybe (Zipper a b) -> p b c -> Maybe (Zipper a c)
+(?+) = flip (fmap . move)
 
 (?-) :: (Typeable c, Typeable b)=> Maybe (Zipper a c) -> Int -> Maybe (Zipper a b)
 mz ?- n = mz >>= moveUp n
@@ -352,12 +413,11 @@ mz ?- n = mz >>= moveUp n
     -- HELPERS
     ------------
 
- -- The core of our 'moveTo' function
-pivot (Z t a') (TL l) = Z (Cons h t) b
-    where h = H l (a' `missing` l)
-          b = getL l a'
-           --TODO: MAYBE GIVE THE GC SOME STRICTNESS HINTS HERE?:
-          missing a l = flip (setL l) a
+ -- The core of our 'move' function
+pivot (Z t a) (TL l) = Z (Cons h t) <$> mb
+    where h = H l (Kleisli c)
+          c = flip (M.set l) a 
+          mb = M.get l a
 
 
  -- fold a thrist into a single category by composing the stack with (.)
@@ -371,7 +431,6 @@ compStack = foldrThrist (flip(.)) id
  -- structure:
 getReverseLensStack :: ZipperStack b a -> Thrist TypeableLens a b
 getReverseLensStack = unflip . foldlThrist revLocal (Flipped Nil)
-    --where rev (Flipped t) (H l _) = Flipped $ Cons (TL l) t
 -- MAKING THIS GLOBAL SHOULD PLEASE GHC 7.0 WITHOUT EXTRA EXTENSIONS. SEE:
 --      http://hackage.haskell.org/trac/ghc/blog/LetGeneralisationInGhc7
 revLocal (Flipped t) (H l _) = Flipped $ Cons (TL l) t
