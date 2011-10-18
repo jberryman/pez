@@ -21,7 +21,7 @@ module Data.Label.Zipper (
      > -- {-# LANGUAGE TemplateHaskell, DeriveDataTypeable, TypeOperators #-}
      > module Main where
      >
-     > import Data.Typeable.Zipper
+     > import Data.Label.Zipper
       
      Create a datatype, deriving an instance of the Typeable class, and generate a
      lens using functions from fclabels:
@@ -110,8 +110,8 @@ module Data.Label.Zipper (
     , (.+) , (.>) , (.-) , (?+) , (?>) , (?-)
     -}
     -- ** Export Typeable class and "fclabels" package
-    , module Data.Label
-    , Data.Typeable.Typeable     
+    --, module Data.Label
+    --, Data.Typeable.Typeable     
 ) where
 
 {- 
@@ -199,7 +199,7 @@ import Control.Monad.Trans.Maybe
 data HistPair b a where 
     H :: (Typeable a, Typeable b)=> 
                 { hLens :: (a M.:~> b)
-                , hCont :: Kleisli Maybe b a -- *see above
+                , hCont :: Kleisli Maybe b a -- see above
                 } -> HistPair b a
 
 type ZipperStack b a = Thrist HistPair b a
@@ -242,12 +242,14 @@ data TypeableLens a b where
 class Motion p where
     -- | Move through the structure to the label specified, returning 'Nothing'
     -- if the motion is invalid.
-    move :: (Typeable b, Typeable c) => p b c -> Zipper a b -> Maybe (Zipper a c)
+    move :: (Typeable b, Typeable c) => 
+                p b c -> Zipper a b -> Maybe (Zipper a c)
 
 -- | a 'Motion' upwards in the data type. e.g. @move (Up 2)@ would move up to
 -- the grandparent level, as long as the type of the focus after the motion is 
 -- @b@.
-newtype Up c b = Up Int
+newtype Up c b = Up { upLevel :: Int }
+    deriving (Show,Eq,Num,Ord,Integral,Bounded,Enum,Real)
 
     ---------------------------
     -- Basic Zipper Functions:
@@ -266,9 +268,10 @@ instance Motion SavedPath where
 
 -- TODO: maybe Up can derive a Num instance??
 instance Motion Up where
-    move (Up 0)  z                  = gcast z
-    move (Up n) (Z (Cons (H _ k) stck) c) = runKleisli k c >>= move (Up (n-1)) . Z stck
-    move _  _                       = Nothing  
+    move (Up 0)  z = gcast z
+    move (Up n) (Z (Cons (H _ k) stck) c) = 
+                     runKleisli k c >>= move (Up (n-1)) . Z stck
+    move _  _      = Nothing  
 
 
 -- | create a zipper with the focus on the top level.
@@ -297,8 +300,8 @@ close = snd . closeSaving
 -- | Move up @n@ levels as long as the type of the parent is what the programmer
 -- is expecting and we aren't already at the top. Otherwise return Nothing.
 moveUpSaving :: (Typeable c, Typeable b)=> 
-                    Int -> Zipper a c -> Maybe (Zipper a b, SavedPath b c)
-moveUpSaving n z = (,) <$> move (Up n) z <*> saveFromAbove n z
+                    Up c b -> Zipper a c -> Maybe (Zipper a b, SavedPath b c)
+moveUpSaving n z = (,) <$> move n z <*> saveFromAbove n z
 
 data ZipperLenses a c b = ZL { zlStack :: ZipperStack b a,
                                zLenses :: Thrist TypeableLens b c }
@@ -306,8 +309,8 @@ data ZipperLenses a c b = ZL { zlStack :: ZipperStack b a,
 
 -- | return a 'SavedPath' from n levels up to the current level
 saveFromAbove :: (Typeable c, Typeable b) => 
-                    Int -> Zipper a c -> Maybe (SavedPath b c)
-saveFromAbove n = fmap (S . zLenses) . mvUpSavingL n . flip ZL Nil . stack
+                    Up c b -> Zipper a c -> Maybe (SavedPath b c)
+saveFromAbove n = fmap (S . zLenses) . mvUpSavingL (upLevel n) . flip ZL Nil . stack
     where
         mvUpSavingL :: (Typeable b', Typeable b)=> 
                         Int -> ZipperLenses a c b -> Maybe (ZipperLenses a c b')

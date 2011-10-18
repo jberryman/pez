@@ -23,7 +23,7 @@ data Tock = LoudTock { _tick :: Tick }
 newtype TickTock = TT { _tickTocks :: Tick }
                    deriving (Typeable, Eq, Show)
 
-$(mkLabelsNoTypes [''TickTock, ''Tock, ''Tick])
+$(mkLabels [''TickTock, ''Tock, ''Tick])
 
 instance Arbitrary TickTock where
     arbitrary = fmap TT arbTick where
