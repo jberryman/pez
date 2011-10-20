@@ -154,6 +154,7 @@ module Data.Label.Zipper (
  -   - actually look at how this performs in terms of space/time
  -
  -   ROADMAP:
+ -    Particularly Elegant
  -    Pink Elephant
  -    Placebo Effect
  -    Patiently Expectant
@@ -236,7 +237,7 @@ data TypeableLens a b where
 --
 -- Then create a separate function:
 --   move' :: (Typeable b, Typeable c)=> (b :-> c) -> Zipper a b -> Zipper a c
---
+
 -- | Types of the Motion class act as references to \"paths\" up or down 
 -- through a datatype.
 class Motion p where
