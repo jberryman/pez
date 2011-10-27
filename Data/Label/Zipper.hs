@@ -1,12 +1,14 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, TypeOperators, TemplateHaskell,
 GADTs, DeriveDataTypeable, 
-FlexibleInstances #-}
+FlexibleInstances,
+MultiParamTypeClasses, FunctionalDependencies #-}
 
 {- |
 PEZ is a generic zipper library. It uses lenses from the "fclabels" package to
 reference a \"location\" to move to in the zipper. The zipper is restricted to
-types in the 'Typeable' class, allowing the user to \"move up\" through complex data
-structures such as mutually-recursive types.
+types in the 'Typeable' class, allowing the user to \"move up\" through complex 
+data structures such as mutually-recursive types, where the compiler could not 
+otherwise type-check the program.
 .
 Both the Typeable class and "fclabels" lenses can be derived in GHC, making it
 easy for the programmer to use a zipper with a minimum of boilerplate.
@@ -182,6 +184,10 @@ import Control.Monad.Trans.Maybe
     -- TYPES: the real heros
     ------------------------
 
+
+-- ZIPPER TYPE --
+-----------------
+
 {- *
  - It's interesting to note in our :~> lenses the setter also can fail, and can
  - fail based not only on the constructor 'f' but also for certain values of 'a'
@@ -214,8 +220,45 @@ data Zipper a b = Z { stack  :: ZipperStack b a
                     } deriving (Typeable)
     
 
+
+-- MOTION CLASSES --
+--------------------
+
+
+-- | Types of the Motion class act as references to \"paths\" up or down 
+-- through a datatype.
+class Motion p where
+    -- | Move through the structure to the label specified, returning 'Nothing'
+    -- if the motion is invalid.
+    move :: (Typeable b, Typeable c) => 
+                p b c -> Zipper a b -> Maybe (Zipper a c)
+
+-- | Defines a relation between a 'Motion' type @p@ and its return motion @p'@.
+class (Motion p, Motion p')=> ReturnMotion p p' | p -> p' where
+    -- | like 'move' but saves the @Motion@ that will return us back to the 
+    -- location we started from in the passed zipper.
+    moveSaving :: (Typeable b, Typeable c) => 
+                    p b c -> Zipper a b -> Maybe (p' c b, Zipper a c)
+
+
+-- MOTION TYPES --
+------------------
+
+-- | a 'Motion' upwards in the data type. e.g. @move (Up 2)@ would move up to
+-- the grandparent level, as long as the type of the focus after the motion is 
+-- @b@.
+newtype Up c b = Up { upLevel :: Int }
+    deriving (Show,Eq,Num,Ord,Integral,Bounded,Enum,Real)
+
+-- | a 'Motion' from the current focus to the top of the data structure.
+newtype Top c a = Top
+    deriving (Show,Eq)
+
+
 -- TODO: when new 'thrist' supports arbitrary Arrow instance, we can derive
 -- Arrow and ArrowChoice / ArrowZero here:
+-- TODO: change this to:  
+--          a :~~> b = S ...
 
 -- | stores the path used to return to the same location in a data structure
 -- as the one we just exited. You can also extract a lens from a SavedPath that
@@ -230,19 +273,6 @@ data TypeableLens a b where
                                     } -> TypeableLens a b
 
 
--- | Types of the Motion class act as references to \"paths\" up or down 
--- through a datatype.
-class Motion p where
-    -- | Move through the structure to the label specified, returning 'Nothing'
-    -- if the motion is invalid.
-    move :: (Typeable b, Typeable c) => 
-                p b c -> Zipper a b -> Maybe (Zipper a c)
-
--- | a 'Motion' upwards in the data type. e.g. @move (Up 2)@ would move up to
--- the grandparent level, as long as the type of the focus after the motion is 
--- @b@.
-newtype Up c b = Up { upLevel :: Int }
-    deriving (Show,Eq,Num,Ord,Integral,Bounded,Enum,Real)
 
     ---------------------------
     -- Basic Zipper Functions:
@@ -252,7 +282,12 @@ newtype Up c b = Up { upLevel :: Int }
 $(mkLabels [''Zipper])
 
 
--- this is (:~>) from fclabels. An alternative is to create a newtype wrapper:
+-- move --
+----------
+
+-- this is (:~>) from fclabels. An alternative is to create a newtype wrapper,
+-- thus avoiding requiring flexible instances.
+-- | @(:~>)@ from "fclabels"
 instance Motion (A.Lens (Kleisli (MaybeT Identity))) where
     move = flip pivot . TL
 
@@ -266,6 +301,15 @@ instance Motion Up where
                      runKleisli k c >>= move (Up (n-1)) . Z stck
     move _  _      = Nothing  
 
+
+-- moveSaving --
+----------------
+
+-- | @(:~>)@ from "fclabels"
+instance ReturnMotion (A.Lens (Kleisli (MaybeT Identity))) Up where
+instance ReturnMotion SavedPath Up where
+instance ReturnMotion Up SavedPath where
+instance ReturnMotion Top SavedPath where
 
 -- | create a zipper with the focus on the top level.
 zipper :: a -> Zipper a a
