@@ -206,7 +206,9 @@ data HistPair b a where
 type ZipperStack b a = Thrist HistPair b a
 
 -- TODO: this could be a contravariant functor, no?:
---
+
+-- | Encapsulates a data type @a@ at a focus @b@, supporting various 'Motion'
+-- operations
 data Zipper a b = Z { stack  :: ZipperStack b a
                     , _focus :: b                                  
                     } deriving (Typeable)
@@ -227,16 +229,6 @@ data TypeableLens a b where
     TL :: (Typeable a,Typeable b)=> { tLens :: (a M.:~> b)
                                     } -> TypeableLens a b
 
-
-
--- TODO: make this return Maybe, make instances be 
-  -- :: (Control.Arrow.ArrowZero (~>)
-  --     Control.Arrow.ArrowChoice (~>)) =>
-  --       Lens (~>) a b
--- in addition to SavedPath.
---
--- Then create a separate function:
---   move' :: (Typeable b, Typeable c)=> (b :-> c) -> Zipper a b -> Zipper a c
 
 -- | Types of the Motion class act as references to \"paths\" up or down 
 -- through a datatype.
