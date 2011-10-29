@@ -14,11 +14,12 @@ Description:         PEZ is a generic zipper library. It uses lenses from the "f
                      Please send any feature requests or bug reports along.
                      .
                      Changes 0.0.4 -> 0.1.0:
-                     >  - module renamed Data.Label.Zipper
-                     >  - 'ZPath' renamed 'Motion', (Up Int) is an instance
-                     >  - 'moveTo' changed to 'move'
-                     >  - zipper operations in Maybe by default
                      >  - use fclabels 1.0
+                     >  - zipper operations in Maybe by default
+                     >  - module renamed Data.Label.Zipper
+                     >  - 'ZPath' renamed 'Motion', define new Up type and instance
+                     >  - 'moveTo' changed to 'move'
+                     >  - savedLens renamed flatten
  
 
 License:             BSD3

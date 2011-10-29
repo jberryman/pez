@@ -88,7 +88,8 @@ module Data.Label.Zipper (
     -- ** Creating and closing Zippers
     , zipper , close
     -- ** Moving around
-    , Motion(..) , Up(..)
+    , Motion(..) , ReturnMotion(..)
+    , Up(..) , SavedPath
     -- ** Querying
     -- | a "fclabels" lens for setting, getting, and modifying the zipper's focus:
     , focus 
@@ -96,9 +97,8 @@ module Data.Label.Zipper (
 
     -- * Advanced functionality
     -- ** Saving positions in a Zipper
-    , SavedPath       
     , save        
-    , savedLens   
+    , flatten   
     , closeSaving
     -- ** Recalling positions:
     , restore     
@@ -319,7 +319,7 @@ zipper = Z Nil
 --
 -- /Note/: For standard lenses produced with 'mkLabels' this will never fail. 
 -- However setters can be used to enforce arbitrary constraints on a data 
--- structure, e.g. thata type @Odd Int@ can only hold an odd integer. This
+-- structure, e.g. that a type @Odd Int@ can only hold an odd integer. This
 -- function returns @Nothing@ in such cases.
 close :: Zipper a b -> Maybe a
 close = snd . closeSaving
@@ -349,8 +349,6 @@ saveFromAbove n = fmap (S . zLenses) . mvUpSavingL (upLevel n) . flip ZL Nil . s
 
 
 
--- TODO: THIS HAS TO RETURN Maybe, SEE COMPSTACK
-
 -- | Close the zipper, returning the saved path back down to the zipper\'s
 -- focus. See 'close'
 closeSaving :: Zipper a b -> (SavedPath a b, Maybe a)
@@ -371,8 +369,8 @@ save = fst . closeSaving
 -- | Extract a composed lens that points to the location we saved. This lets 
 -- us modify, set or get a location that we visited with our 'Zipper' after 
 -- closing the Zipper.
-savedLens :: (Typeable a, Typeable b)=> SavedPath a b -> (a M.:~> b)
-savedLens = compStack . mapThrist tLens . savedLenses
+flatten :: (Typeable a, Typeable b)=> SavedPath a b -> (a M.:~> b)
+flatten = compStack . mapThrist tLens . savedLenses
 
 
 -- | Return to a previously 'SavedPath' location within a data-structure. 
