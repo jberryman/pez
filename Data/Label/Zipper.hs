@@ -1,5 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, TypeOperators, TemplateHaskell,
-GADTs, DeriveDataTypeable, 
+GADTs, DeriveDataTypeable, TupleSections,
 FlexibleInstances,
 MultiParamTypeClasses, FunctionalDependencies #-}
 
@@ -60,7 +60,7 @@ module Data.Label.Zipper (
     -}
 
     -- * Basic Zipper functionality
-      Zipper() 
+    Zipper() 
     {- |
        /A note on failure in zipper operations:/
 
@@ -92,7 +92,7 @@ module Data.Label.Zipper (
     -- ** Querying
     -- | a "fclabels" lens for setting, getting, and modifying the zipper's focus:
     , focus 
-    , viewf , atTop       
+    , viewf , atTop , level
 
     -- * Advanced functionality
     -- ** Saving positions in a Zipper
@@ -250,10 +250,6 @@ class (Motion p, Motion p')=> ReturnMotion p p' | p -> p' where
 newtype Up c b = Up { upLevel :: Int }
     deriving (Show,Eq,Num,Ord,Integral,Bounded,Enum,Real)
 
--- | a 'Motion' from the current focus to the top of the data structure.
-newtype Top c a = Top
-    deriving (Show,Eq)
-
 
 -- TODO: when new 'thrist' supports arbitrary Arrow instance, we can derive
 -- Arrow and ArrowChoice / ArrowZero here:
@@ -287,6 +283,7 @@ $(mkLabels [''Zipper])
 
 -- this is (:~>) from fclabels. An alternative is to create a newtype wrapper,
 -- thus avoiding requiring flexible instances.
+
 -- | @(:~>)@ from "fclabels"
 instance Motion (A.Lens (Kleisli (MaybeT Identity))) where
     move = flip pivot . TL
@@ -298,8 +295,8 @@ instance Motion SavedPath where
 instance Motion Up where
     move (Up 0)  z = gcast z
     move (Up n) (Z (Cons (H _ k) stck) c) = 
-                     runKleisli k c >>= move (Up (n-1)) . Z stck
-    move _  _      = Nothing  
+        runKleisli k c >>= move (Up (n-1)) . Z stck
+    move _       _ = Nothing  
 
 
 -- moveSaving --
@@ -307,9 +304,13 @@ instance Motion Up where
 
 -- | @(:~>)@ from "fclabels"
 instance ReturnMotion (A.Lens (Kleisli (MaybeT Identity))) Up where
+    moveSaving p z = (1,) <$> move p z
+
 instance ReturnMotion SavedPath Up where
+    moveSaving p z = (Up$ lengthThrist$ savedLenses p,) <$> move p z
+
 instance ReturnMotion Up SavedPath where
-instance ReturnMotion Top SavedPath where
+    moveSaving p z = (,) <$> saveFromAbove p z <*> move p z
 
 -- | create a zipper with the focus on the top level.
 zipper :: a -> Zipper a a
@@ -400,11 +401,9 @@ restore s = move s . zipper
 atTop :: Zipper a b -> Bool
 atTop = nullThrist . stack
 
-{-
 -- | Return our depth in the 'Zipper'. if 'atTop' z then 'level' z == 0
 level :: Zipper a b -> Int
-level = foldlThrist (.) ...forgot how to do this :(
--}
+level = lengthThrist . stack
 ----------------------------------------------------------------------------
 
 
@@ -477,3 +476,12 @@ getReverseLensStack = unflip . foldlThrist revLocal (Flipped Nil)
 -- MAKING THIS GLOBAL SHOULD PLEASE GHC 7.0 WITHOUT EXTRA EXTENSIONS. SEE:
 --      http://hackage.haskell.org/trac/ghc/blog/LetGeneralisationInGhc7
 revLocal (Flipped t) (H l _) = Flipped $ Cons (TL l) t
+
+
+-- this would be useful in thrist
+newtype IntB a b = IntB { getInt :: Int }
+plusB :: IntB a b -> IntB b c -> IntB a c
+plusB a b = IntB (getInt a + getInt b)
+
+lengthThrist :: Thrist (+>) a b -> Int
+lengthThrist = getInt . foldrThrist plusB (IntB 0) . mapThrist (const $ IntB 1)
