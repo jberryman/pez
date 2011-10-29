@@ -98,7 +98,6 @@ module Data.Label.Zipper (
     -- ** Saving positions in a Zipper
     , SavedPath       
     , save        
-    , saveFromAbove
     , savedLens   
     , closeSaving
     -- ** Recalling positions:
