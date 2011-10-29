@@ -21,6 +21,7 @@ Description:         PEZ is a generic zipper library. It uses lenses from the "f
                      >  - 'moveTo' changed to 'move'
                      >  - savedLens renamed flatten
                      >  - SavedPath renamed (:~~>) 
+                     >  - removed experimental operators
  
 
 License:             BSD3

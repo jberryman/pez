@@ -105,10 +105,7 @@ module Data.Label.Zipper (
 
     -- * Convenience operators, types, and exports
     , Zipper1
-    {-
-    -- ** Operators
-    , (.+) , (.>) , (.-) , (?+) , (?>) , (?-)
-    -}
+
     -- ** Export Typeable class and "fclabels" package
     --, module Data.Label
     --, Data.Typeable.Typeable     
@@ -416,33 +413,6 @@ viewf = get focus
 type Zipper1 a = Zipper a a
 
 
-{-
--- bind higher than <$>. Is this acceptable?:
-infixl 5 .+, .>, .-, ?+, ?>, ?-
-
--- | 'move' with arguments flipped. Operator plays on the idea of addition of
--- levels onto the focus.
-(.+) :: (Motion p, Typeable b, Typeable c)=> Zipper a b -> p b c -> Zipper a c
-(.+) = flip move
-
--- | 'moveUp' with arguments flipped. Operator syntax comes from the idea of
--- moving up as subtraction.
-(.-) :: (Typeable c, Typeable b)=> Zipper a c -> Int -> Maybe (Zipper a b)
-(.-) = flip moveUp
-
--- | @'setL' 'focus'@, with arguments flipped
-(.>) :: Zipper a b -> b -> Zipper a b
-(.>) = flip (setL focus)
-
-(?+) :: (Motion p, Typeable b, Typeable c)=> Maybe (Zipper a b) -> p b c -> Maybe (Zipper a c)
-(?+) = flip (fmap . move)
-
-(?-) :: (Typeable c, Typeable b)=> Maybe (Zipper a c) -> Int -> Maybe (Zipper a b)
-mz ?- n = mz >>= moveUp n
-
-(?>) :: Maybe (Zipper a b) -> b -> Maybe (Zipper a b)
-(?>) = flip (fmap . setL focus)
--}
 
     ------------
     -- HELPERS
