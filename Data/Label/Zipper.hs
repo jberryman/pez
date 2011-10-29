@@ -101,7 +101,6 @@ module Data.Label.Zipper (
     , saveFromAbove
     , savedLens   
     , closeSaving
-    , moveUpSaving
     -- ** Recalling positions:
     , restore     
 
@@ -332,14 +331,6 @@ close = snd . closeSaving
     -- ADVANCED ZIPPER FUNCTIONS:
     ------------------------------
 
--- TODO: this could sort of be polymorphic over Motion but that wouldn't really
--- have much meaning for moving down (would return the lens we passed)
-
--- | Move up @n@ levels as long as the type of the parent is what the programmer
--- is expecting and we aren't already at the top. Otherwise return Nothing.
-moveUpSaving :: (Typeable c, Typeable b)=> 
-                    Up c b -> Zipper a c -> Maybe (Zipper a b, SavedPath b c)
-moveUpSaving n z = (,) <$> move n z <*> saveFromAbove n z
 
 data ZipperLenses a c b = ZL { zlStack :: ZipperStack b a,
                                zLenses :: Thrist TypeableLens b c }
