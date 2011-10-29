@@ -89,7 +89,7 @@ module Data.Label.Zipper (
     , zipper , close
     -- ** Moving around
     , Motion(..) , ReturnMotion(..)
-    , Up(..) , SavedPath
+    , Up(..) , (:~~>)()
     -- ** Querying
     -- | a "fclabels" lens for setting, getting, and modifying the zipper's focus:
     , focus 
@@ -251,13 +251,16 @@ newtype Up c b = Up { upLevel :: Int }
 
 -- TODO: when new 'thrist' supports arbitrary Arrow instance, we can derive
 -- Arrow and ArrowChoice / ArrowZero here:
--- TODO: change this to:  
---          a :~~> b = S ...
 
--- | stores the path used to return to the same location in a data structure
--- as the one we just exited. You can also extract a lens from a SavedPath that
--- points to that location:
-newtype SavedPath a b = S { savedLenses :: Thrist TypeableLens a b } 
+-- | A lens type similar to ':~>' from "fclabels" but which stores a path into a
+-- datatype \"in pieces\" so to speak, so that when used in 'move' or 'restore'
+-- a history is saved of incremental steps taken through the structure, so for a
+-- zipper @z@...
+--
+-- > (\(l,ma)-> move l <$> ma) (closeSaving z)  ==  Just z
+--
+-- Use 'flatten' to turn this into a standard fclabels lens.
+newtype a :~~> b = S { savedLenses :: Thrist TypeableLens a b } 
     deriving (Typeable, Category)
 
 -- We need another GADT here to enforce the Typeable constraint within the
@@ -286,7 +289,7 @@ $(mkLabels [''Zipper])
 instance Motion (A.Lens (Kleisli (MaybeT Identity))) where
     move = flip pivot . TL
 
-instance Motion SavedPath where
+instance Motion (:~~>) where
     move = flip (foldMThrist pivot) . savedLenses  
 
 -- TODO: maybe Up can derive a Num instance??
@@ -304,10 +307,10 @@ instance Motion Up where
 instance ReturnMotion (A.Lens (Kleisli (MaybeT Identity))) Up where
     moveSaving p z = (1,) <$> move p z
 
-instance ReturnMotion SavedPath Up where
+instance ReturnMotion (:~~>) Up where
     moveSaving p z = (Up$ lengthThrist$ savedLenses p,) <$> move p z
 
-instance ReturnMotion Up SavedPath where
+instance ReturnMotion Up (:~~>) where
     moveSaving p z = (,) <$> saveFromAbove p z <*> move p z
 
 -- | create a zipper with the focus on the top level.
@@ -335,9 +338,9 @@ data ZipperLenses a c b = ZL { zlStack :: ZipperStack b a,
                                zLenses :: Thrist TypeableLens b c }
 
 
--- | return a 'SavedPath' from n levels up to the current level
+-- INTERNAL:
 saveFromAbove :: (Typeable c, Typeable b) => 
-                    Up c b -> Zipper a c -> Maybe (SavedPath b c)
+                    Up c b -> Zipper a c -> Maybe (b :~~> c)
 saveFromAbove n = fmap (S . zLenses) . mvUpSavingL (upLevel n) . flip ZL Nil . stack
     where
         mvUpSavingL :: (Typeable b', Typeable b)=> 
@@ -351,29 +354,31 @@ saveFromAbove n = fmap (S . zLenses) . mvUpSavingL (upLevel n) . flip ZL Nil . s
 
 -- | Close the zipper, returning the saved path back down to the zipper\'s
 -- focus. See 'close'
-closeSaving :: Zipper a b -> (SavedPath a b, Maybe a)
+closeSaving :: Zipper a b -> (a :~~> b, Maybe a)
 closeSaving (Z stck b) = (S ls, ma)
     where ls = getReverseLensStack stck
           kCont = compStack $ mapThrist hCont stck
           ma = runKleisli kCont b
 
 
--- | Return a 'SavedPath' type encapsulating the current location in the 'Zipper'.
+-- | Return a (':~~>') type encapsulating the current location in the 'Zipper'.
 -- This lets you return to a location in your data type after closing the 
 -- Zipper.
 --
 -- > save = fst . closeSaving
-save :: Zipper a b -> SavedPath a b
+save :: Zipper a b -> (a :~~> b)
 save = fst . closeSaving
 
 -- | Extract a composed lens that points to the location we saved. This lets 
 -- us modify, set or get a location that we visited with our 'Zipper' after 
 -- closing the Zipper.
-flatten :: (Typeable a, Typeable b)=> SavedPath a b -> (a M.:~> b)
+flatten :: (Typeable a, Typeable b)=> (a :~~> b) -> (a M.:~> b)
 flatten = compStack . mapThrist tLens . savedLenses
 
 
--- | Return to a previously 'SavedPath' location within a data-structure. 
+-- TODO: restore no longer is a good name for this. 'enter' is better
+
+-- | Enter a zipper using the specified 'Motion'.
 --
 -- Saving and restoring lets us for example: find some location within our 
 -- structure using a 'Zipper', save the location, 'fmap' over the entire structure,
