@@ -118,12 +118,6 @@ module Data.Label.Zipper (
  -
  -   TODO NOTES
  -
- -   - When the 'fclabels' package supports failure handling a.la the code on
- -   Github, then these functions will take advantage of that by returning
- -   Nothing when a lens is applied to an invalid constructor:
- -       * moveTo
- -       * restore
- -
  -   - see if Zipper monad looks more attractive now w/ partial types.
  -   
  -   - look at usability and re-define/remove/add functions as needed, e.g.:
@@ -133,8 +127,9 @@ module Data.Label.Zipper (
  -         ...perhaps we can make something clever using property of pattern match
  -         failure in 'do' block?
  -         - SEE IF ArrowChoice MIGHT GET US CLOSE TO WHAT WE WANT
+ -         - NEW: create a new Motion that encapsulates 'moveUntil'
+ -            newtype Repeatedly a a = Repeatedly (a :~> a)
  -       - experiments with state monad interface (see above)
- -
  -
  -   - Separate module: Data.Record.Label.Prelude that
  -   exports labels for haskell builtin types. Ask S. V. if he wantd to include
@@ -275,7 +270,11 @@ $(mkLabels [''Zipper])
 ----------
 
 -- this is (:~>) from fclabels. An alternative is to create a newtype wrapper,
--- thus avoiding requiring flexible instances.
+-- thus avoiding requiring flexible instances. That might make more sense once
+-- we start adding new wrappers for 'move' arguments like Repeatedly. Having a
+-- 'To' wrapper is pretty light weight:
+--    move (To left)   vs.
+--    move left
 
 -- | @(:~>)@ from "fclabels"
 instance Motion (A.Lens (Kleisli (MaybeT Identity))) where

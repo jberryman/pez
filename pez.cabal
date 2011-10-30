@@ -14,6 +14,7 @@ Description:         PEZ is a generic zipper library. It uses lenses from the "f
                      Please send any feature requests or bug reports along.
                      .
                      Changes 0.0.4 -> 0.1.0:
+                     .
                      >  - use fclabels 1.0
                      >  - zipper operations in Maybe by default
                      >  - module renamed Data.Label.Zipper
@@ -22,6 +23,7 @@ Description:         PEZ is a generic zipper library. It uses lenses from the "f
                      >  - savedLens renamed flatten
                      >  - SavedPath renamed (:~~>) 
                      >  - removed experimental operators
+                     .
  
 
 License:             BSD3
@@ -64,6 +66,10 @@ Library
                    , TemplateHaskell
                    , GADTs
                    , DeriveDataTypeable
+                   , TupleSections
+                   , FlexibleInstances
+                   , MultiParamTypeClasses
+                   , FunctionalDependencies
   
   -- Modules not exported by this package.
   --Other-modules:     Data.Record.Label.Prelude  
