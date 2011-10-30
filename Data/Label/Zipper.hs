@@ -59,7 +59,7 @@ module Data.Label.Zipper (
      > stringRep = lens show (const . read)
     -}
 
-    -- * Basic Zipper functionality
+    -- * Zipper functionality
     Zipper() 
     {- |
        /A note on failure in zipper operations:/
@@ -94,14 +94,9 @@ module Data.Label.Zipper (
     -- | a "fclabels" lens for setting, getting, and modifying the zipper's focus:
     , focus 
     , viewf , atTop , level
-
-    -- * Advanced functionality
-    -- ** Saving positions in a Zipper
-    , save        
-    , flatten   
-    , closeSaving
-    -- ** Recalling positions:
-    , restore     
+    -- ** Saving and recalling positions in a Zipper
+    , save , closeSaving
+    , restore , flatten   
 
     -- * Convenience operators, types, and exports
     , Zipper1
@@ -373,8 +368,6 @@ flatten :: (Typeable a, Typeable b)=> (a :~~> b) -> (a M.:~> b)
 flatten = compStack . mapThrist tLens . savedLenses
 
 
--- TODO: restore no longer is a good name for this. 'enter' is better
-
 -- | Enter a zipper using the specified 'Motion'.
 --
 -- Saving and restoring lets us for example: find some location within our 
@@ -383,7 +376,7 @@ flatten = compStack . mapThrist tLens . savedLenses
 -- structure has changed.
 --
 -- > restore s = move s . zipper
-restore :: (Motion p, Typeable a, Typeable b)=> p a b -> a -> Maybe (Zipper a b)
+restore :: (Typeable a, Typeable b)=> (a :~~> b) -> a -> Maybe (Zipper a b)
 restore s = move s . zipper
 
 
@@ -403,7 +396,7 @@ level = lengthThrist . stack
 
 -- | a view function for a 'Zipper'\'s focus.
 --
--- > viewf = getL focus
+-- > viewf = get focus
 viewf :: Zipper a b -> b
 viewf = get focus
 
