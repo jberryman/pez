@@ -106,6 +106,8 @@ module Data.Label.Zipper (
     --, Data.Typeable.Typeable     
 ) where
 
+
+
 {- 
  -   IMPLEMENTATION NOTES:
  -
@@ -118,7 +120,24 @@ module Data.Label.Zipper (
  -
  -   TODO NOTES
  -
- -   - see if Zipper monad looks more attractive now w/ partial types.
+ -   - experiment w/ making an instance (Either a), for Either a a types
+ -   - try wrapping fclabels stuff in To newtype
+ -   - add UpCasting, UpTopmostCasting motions
+ -   - figure out a way to encapsulate doing a movement repeatedly:
+ -      - repeatedly :: (Zipper1 a -> Maybe (Zipper1 a)) -> Zipper1 a -> Zipper1 a  
+ -         e.g. repeatedly (move $ Up 2)
+ -         ... but then we need another variant for moveSaving right?...
+ -      - new function move1 :: (Motion1 b)=> m b -> Zipper a b -> Maybe (Zipper a b)   
+ -          (opportunities for some good stuff (see notes))
+ -   - make Up, etc. be Category
+ -   - decide on minimal exports from Category and fclabels
+ -   - update tests
+ -   - clean up documentation
+ -   - release 0.1.0
+ -
+ -   - pure move functionality (either separate module/namespace or new
+ -      function)
+ -   - Kleisli-wrapped arrow interface that works nicely with proc notation
  -   
  -   - look at usability and re-define/remove/add functions as needed, e.g.:
  -       - Create a 'moveUntil' function, or something else to capture the ugly:
@@ -127,9 +146,6 @@ module Data.Label.Zipper (
  -         ...perhaps we can make something clever using property of pattern match
  -         failure in 'do' block?
  -         - SEE IF ArrowChoice MIGHT GET US CLOSE TO WHAT WE WANT
- -         - NEW: create a new Motion that encapsulates 'moveUntil'
- -            newtype Repeatedly a a = Repeatedly (a :~> a)
- -       - experiments with state monad interface (see above)
  -
  -   - Separate module: Data.Record.Label.Prelude that
  -   exports labels for haskell builtin types. Ask S. V. if he wantd to include
@@ -230,10 +246,11 @@ class (Motion p, Motion p')=> ReturnMotion p p' | p -> p' where
 ------------------
 
 -- | a 'Motion' upwards in the data type. e.g. @move (Up 2)@ would move up to
--- the grandparent level, as long as the type of the focus after the motion is 
+-- the grandparent level, as long as the type of the focus after moving is 
 -- @b@.
 newtype Up c b = Up { upLevel :: Int }
     deriving (Show,Eq,Num,Ord,Integral,Bounded,Enum,Real)
+
 
 
 -- TODO: when new 'thrist' supports arbitrary Arrow instance, we can derive
