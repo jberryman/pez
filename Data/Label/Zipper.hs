@@ -172,8 +172,6 @@ import Prelude hiding ((.), id)
 import Control.Applicative
 import Control.Arrow(Kleisli(..))
 -- these required for creating a Motion instance for lenses:
-import Control.Monad.Identity
-import Control.Monad.Trans.Maybe
 
     -------------------------
     -- TYPES: the real heros
@@ -214,6 +212,7 @@ data Zipper a b = Z { stack  :: ZipperStack b a
                     , _focus :: b                                  
                     } deriving (Typeable)
     
+$(mkLabels [''Zipper])
 
 
 -- MOTION CLASSES --
@@ -236,8 +235,8 @@ class (Motion p, Motion p')=> ReturnMotion p p' | p -> p' where
                     p b c -> Zipper a b -> Maybe (p' c b, Zipper a c)
 
 
--- MOTION TYPES --
-------------------
+-- MOTIONS
+-------------
 
 -- | a 'Motion' upwards in the data type. e.g. @move (Up 2)@ would move up to
 -- the grandparent level, as long as the type of the focus after moving is 
@@ -249,10 +248,21 @@ instance Category Up where
     (Up m) . (Up n) = Up (m+n)
     id              = 0
 
---  a wrapper for a "fclabels" lens supporting failure. This can be used as a
--- motion \"down\" or \"into\" a 'zipper'ed data structure.
---newtype To a b = To { toLens :: a M.:~> b }
---    deriving (Category,Iso (Kleisli (MaybeT Identity)))
+instance Motion Up where
+    move (Up 0)  z = gcast z
+    move (Up n) (Z (Cons (H _ k) stck) c) = 
+        runKleisli k c >>= move (Up (n-1)) . Z stck
+    move _       _ = Nothing  
+
+instance ReturnMotion Up To where
+    moveSaving p z = (,) <$> saveFromAbove p z <*> move p z
+
+
+-- | indicates a 'Motion' upwards in the zipper until we arrive at a type which
+-- we can cast to @b@, returning 'Nothing' if we hit the top without a cast
+-- succeeding
+data UpUntilType c b = UpUntilType
+
 
 -- TODO: when new 'thrist' supports arbitrary Arrow instance, we can derive
 -- Arrow and ArrowChoice / ArrowZero here:
@@ -274,50 +284,16 @@ data TypeableLens a b where
     TL :: (Typeable a,Typeable b)=> { tLens :: (a M.:~> b)
                                     } -> TypeableLens a b
 
+instance Motion To where
+    move = flip (foldMThrist pivot) . savedLenses  
+
 -- | use a "fclabels" label to define a Motion \"down\" into a data type.
 to :: (Typeable a, Typeable b)=> (a M.:~> b) -> To a b
 to = S . flip Cons Nil . TL
 
-
-
-
-    ---------------------------
-    -- Basic Zipper Functions:
-    ---------------------------
-
-
-$(mkLabels [''Zipper])
-
-
--- move --
-----------
-
---instance Motion To where
-    --move = flip pivot . TL . toLens
-
-instance Motion To where
-    move = flip (foldMThrist pivot) . savedLenses  
-
--- TODO: maybe Up can derive a Num instance??
-instance Motion Up where
-    move (Up 0)  z = gcast z
-    move (Up n) (Z (Cons (H _ k) stck) c) = 
-        runKleisli k c >>= move (Up (n-1)) . Z stck
-    move _       _ = Nothing  
-
-
--- moveSaving --
-----------------
-
---  @(:~>)@ from "fclabels"
---instance ReturnMotion To Up where
---    moveSaving p z = (1,) <$> move p z
-
 instance ReturnMotion To Up where
     moveSaving p z = (Up$ lengthThrist$ savedLenses p,) <$> move p z
 
-instance ReturnMotion Up To where
-    moveSaving p z = (,) <$> saveFromAbove p z <*> move p z
 
 -- | create a zipper with the focus on the top level.
 zipper :: a -> Zipper a a

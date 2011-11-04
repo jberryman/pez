@@ -58,9 +58,6 @@ Library
   Build-depends:       base >= 4 && < 5
                      , fclabels >= 1.0
                      , thrist >= 0.2 && < 0.3
-                     -- these are required simply for declaring type of (:~>)
-                     , transformers
-                     , mtl
 
   Extensions:        GeneralizedNewtypeDeriving
                    , TypeOperators
