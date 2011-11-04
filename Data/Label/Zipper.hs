@@ -88,7 +88,7 @@ module Data.Label.Zipper (
     , zipper , close
     -- ** Moving around
     , Motion(..) , ReturnMotion(..)
-    , Up(..) , (:~~>)()
+    , Up(..) , To(..) , (:~~>)()
     -- ** Querying
     -- | a "fclabels" lens for setting, getting, and modifying the zipper's focus:
     , focus 
@@ -119,16 +119,13 @@ module Data.Label.Zipper (
  -
  -   TODO NOTES
  -
- -   - experiment w/ making an instance (Either a), for Either a a types
- -   - try wrapping fclabels stuff in To newtype
+ -   - (:~~>) no longer is compelling since we're wrapping :~>, change to:
+ -      - BackTo
+ -      - ??
  -   - add UpCasting, UpTopmostCasting motions
  -   - figure out a way to encapsulate doing a movement repeatedly:
- -      - repeatedly :: (Zipper1 a -> Maybe (Zipper1 a)) -> Zipper1 a -> Zipper1 a  
- -         e.g. repeatedly (move $ Up 2)
- -         ... but then we need another variant for moveSaving right?...
  -      - new function move1 :: (Motion1 b)=> m b -> Zipper a b -> Maybe (Zipper a b)   
  -          (opportunities for some good stuff (see notes))
- -   - make Up, etc. be Category
  -   - decide on minimal exports from Category and fclabels
  -   - update tests
  -   - clean up documentation
@@ -248,6 +245,10 @@ class (Motion p, Motion p')=> ReturnMotion p p' | p -> p' where
 -- @b@.
 newtype Up c b = Up { upLevel :: Int }
     deriving (Show,Eq,Num,Ord,Integral,Bounded,Enum,Real)
+
+instance Category Up where
+    (Up m) . (Up n) = Up (m+n)
+    id              = 0
 
 -- | a wrapper for a "fclabels" lens supporting failure. This can be used as a
 -- motion \"down\" or \"into\" a 'zipper'ed data structure.
