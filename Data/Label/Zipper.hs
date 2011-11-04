@@ -1,6 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, TypeOperators, TemplateHaskell,
 GADTs, DeriveDataTypeable, TupleSections,
-FlexibleInstances,
 MultiParamTypeClasses, FunctionalDependencies #-}
 
 {- |
@@ -168,7 +167,6 @@ module Data.Label.Zipper (
  -- this is where the magic happens:
 import Data.Label
 import qualified Data.Label.Maybe as M
-import qualified Data.Label.Abstract as A
 import Data.Typeable
 import Data.Thrist
 
@@ -251,7 +249,10 @@ class (Motion p, Motion p')=> ReturnMotion p p' | p -> p' where
 newtype Up c b = Up { upLevel :: Int }
     deriving (Show,Eq,Num,Ord,Integral,Bounded,Enum,Real)
 
-
+-- | a wrapper for a "fclabels" lens supporting failure. This can be used as a
+-- motion \"down\" or \"into\" a 'zipper'ed data structure.
+newtype To a b = To { toLens :: a M.:~> b }
+    deriving (Category,Iso (Kleisli (MaybeT Identity)))
 
 -- TODO: when new 'thrist' supports arbitrary Arrow instance, we can derive
 -- Arrow and ArrowChoice / ArrowZero here:
@@ -294,8 +295,8 @@ $(mkLabels [''Zipper])
 --    move left
 
 -- | @(:~>)@ from "fclabels"
-instance Motion (A.Lens (Kleisli (MaybeT Identity))) where
-    move = flip pivot . TL
+instance Motion To where
+    move = flip pivot . TL . toLens
 
 instance Motion (:~~>) where
     move = flip (foldMThrist pivot) . savedLenses  
@@ -312,7 +313,7 @@ instance Motion Up where
 ----------------
 
 -- | @(:~>)@ from "fclabels"
-instance ReturnMotion (A.Lens (Kleisli (MaybeT Identity))) Up where
+instance ReturnMotion To Up where
     moveSaving p z = (1,) <$> move p z
 
 instance ReturnMotion (:~~>) Up where
