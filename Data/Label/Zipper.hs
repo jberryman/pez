@@ -88,7 +88,7 @@ module Data.Label.Zipper (
     , zipper , close
     -- ** Moving around
     , Motion(..) , ReturnMotion(..)
-    , Up(..) , To(..) , (:~~>)()
+    , Up(..) , To() , to
     -- ** Querying
     -- | a "fclabels" lens for setting, getting, and modifying the zipper's focus:
     , focus 
@@ -119,9 +119,6 @@ module Data.Label.Zipper (
  -
  -   TODO NOTES
  -
- -   - (:~~>) no longer is compelling since we're wrapping :~>, change to:
- -      - BackTo
- -      - ??
  -   - add UpCasting, UpTopmostCasting motions
  -   - figure out a way to encapsulate doing a movement repeatedly:
  -      - new function move1 :: (Motion1 b)=> m b -> Zipper a b -> Maybe (Zipper a b)   
@@ -131,6 +128,8 @@ module Data.Label.Zipper (
  -   - clean up documentation
  -   - release 0.1.0
  -
+ -   - look at Arrow instance for thrist (in module yet)
+ -   - make To an instance if Iso (if possible)
  -   - pure move functionality (either separate module/namespace or new
  -      function)
  -   - Kleisli-wrapped arrow interface that works nicely with proc notation
@@ -250,23 +249,23 @@ instance Category Up where
     (Up m) . (Up n) = Up (m+n)
     id              = 0
 
--- | a wrapper for a "fclabels" lens supporting failure. This can be used as a
+--  a wrapper for a "fclabels" lens supporting failure. This can be used as a
 -- motion \"down\" or \"into\" a 'zipper'ed data structure.
-newtype To a b = To { toLens :: a M.:~> b }
-    deriving (Category,Iso (Kleisli (MaybeT Identity)))
+--newtype To a b = To { toLens :: a M.:~> b }
+--    deriving (Category,Iso (Kleisli (MaybeT Identity)))
 
 -- TODO: when new 'thrist' supports arbitrary Arrow instance, we can derive
 -- Arrow and ArrowChoice / ArrowZero here:
 
--- | A lens type similar to ':~>' from "fclabels" but which stores a path into a
--- datatype \"in pieces\" so to speak, so that when used in 'move' or 'restore'
--- a history is saved of incremental steps taken through the structure, so for a
--- zipper @z@...
+-- | A 'Motion' type describing an incremental path \"down\" through a data
+-- structure. This can be used with 'restore' to return to a previously-visited
+-- location in a zipper, so...
 --
 -- > (\(l,ma)-> move l <$> ma) (closeSaving z)  ==  Just z
 --
--- Use 'flatten' to turn this into a standard fclabels lens.
-newtype a :~~> b = S { savedLenses :: Thrist TypeableLens a b } 
+-- Use 'flatten' to turn this into a standard fclabels lens, flattening the
+-- incremental move steps.
+newtype To a b = S { savedLenses :: Thrist TypeableLens a b } 
     deriving (Typeable, Category)
 
 -- We need another GADT here to enforce the Typeable constraint within the
@@ -274,6 +273,11 @@ newtype a :~~> b = S { savedLenses :: Thrist TypeableLens a b }
 data TypeableLens a b where
     TL :: (Typeable a,Typeable b)=> { tLens :: (a M.:~> b)
                                     } -> TypeableLens a b
+
+-- | use a "fclabels" label to define a Motion \"down\" into a data type.
+to :: (Typeable a, Typeable b)=> (a M.:~> b) -> To a b
+to = S . flip Cons Nil . TL
+
 
 
 
@@ -288,18 +292,10 @@ $(mkLabels [''Zipper])
 -- move --
 ----------
 
--- this is (:~>) from fclabels. An alternative is to create a newtype wrapper,
--- thus avoiding requiring flexible instances. That might make more sense once
--- we start adding new wrappers for 'move' arguments like Repeatedly. Having a
--- 'To' wrapper is pretty light weight:
---    move (To left)   vs.
---    move left
+--instance Motion To where
+    --move = flip pivot . TL . toLens
 
--- | @(:~>)@ from "fclabels"
 instance Motion To where
-    move = flip pivot . TL . toLens
-
-instance Motion (:~~>) where
     move = flip (foldMThrist pivot) . savedLenses  
 
 -- TODO: maybe Up can derive a Num instance??
@@ -313,14 +309,14 @@ instance Motion Up where
 -- moveSaving --
 ----------------
 
--- | @(:~>)@ from "fclabels"
-instance ReturnMotion To Up where
-    moveSaving p z = (1,) <$> move p z
+--  @(:~>)@ from "fclabels"
+--instance ReturnMotion To Up where
+--    moveSaving p z = (1,) <$> move p z
 
-instance ReturnMotion (:~~>) Up where
+instance ReturnMotion To Up where
     moveSaving p z = (Up$ lengthThrist$ savedLenses p,) <$> move p z
 
-instance ReturnMotion Up (:~~>) where
+instance ReturnMotion Up To where
     moveSaving p z = (,) <$> saveFromAbove p z <*> move p z
 
 -- | create a zipper with the focus on the top level.
@@ -350,7 +346,7 @@ data ZipperLenses a c b = ZL { zlStack :: ZipperStack b a,
 
 -- INTERNAL:
 saveFromAbove :: (Typeable c, Typeable b) => 
-                    Up c b -> Zipper a c -> Maybe (b :~~> c)
+                    Up c b -> Zipper a c -> Maybe (To b c)
 saveFromAbove n = fmap (S . zLenses) . mvUpSavingL (upLevel n) . flip ZL Nil . stack
     where
         mvUpSavingL :: (Typeable b', Typeable b)=> 
@@ -364,25 +360,24 @@ saveFromAbove n = fmap (S . zLenses) . mvUpSavingL (upLevel n) . flip ZL Nil . s
 
 -- | Close the zipper, returning the saved path back down to the zipper\'s
 -- focus. See 'close'
-closeSaving :: Zipper a b -> (a :~~> b, Maybe a)
+closeSaving :: Zipper a b -> (To a b, Maybe a)
 closeSaving (Z stck b) = (S ls, ma)
     where ls = getReverseLensStack stck
           kCont = compStack $ mapThrist hCont stck
           ma = runKleisli kCont b
 
 
--- | Return a (':~~>') type encapsulating the current location in the 'Zipper'.
--- This lets you return to a location in your data type after closing the 
--- Zipper.
+-- | Return a path 'To' the current location in the 'Zipper'.
+-- This lets you return to a location in your data type with 'restore'.
 --
 -- > save = fst . closeSaving
-save :: Zipper a b -> (a :~~> b)
+save :: Zipper a b -> To a b
 save = fst . closeSaving
 
 -- | Extract a composed lens that points to the location we saved. This lets 
 -- us modify, set or get a location that we visited with our 'Zipper' after 
 -- closing the Zipper.
-flatten :: (Typeable a, Typeable b)=> (a :~~> b) -> (a M.:~> b)
+flatten :: (Typeable a, Typeable b)=> To a b -> (a M.:~> b)
 flatten = compStack . mapThrist tLens . savedLenses
 
 
@@ -394,7 +389,7 @@ flatten = compStack . mapThrist tLens . savedLenses
 -- structure has changed.
 --
 -- > restore s = move s . zipper
-restore :: (Typeable a, Typeable b)=> (a :~~> b) -> a -> Maybe (Zipper a b)
+restore :: (Typeable a, Typeable b)=> To a b -> a -> Maybe (Zipper a b)
 restore s = move s . zipper
 
 
