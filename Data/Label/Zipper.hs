@@ -88,7 +88,7 @@ module Data.Label.Zipper (
     , zipper , close
     -- ** Moving around
     , Motion(..) , ReturnMotion(..)
-    , Up(..) , To() , to
+    , Up(..) , UpUntilType , To() , to
     -- ** Querying
     -- | a "fclabels" lens for setting, getting, and modifying the zipper's focus:
     , focus 
@@ -171,7 +171,8 @@ import Control.Category
 import Prelude hiding ((.), id)
 import Control.Applicative
 import Control.Arrow(Kleisli(..))
--- these required for creating a Motion instance for lenses:
+import Data.Maybe
+
 
     -------------------------
     -- TYPES: the real heros
@@ -262,6 +263,13 @@ instance ReturnMotion Up To where
 -- we can cast to @b@, returning 'Nothing' if we hit the top without a cast
 -- succeeding
 data UpUntilType c b = UpUntilType
+
+instance Motion UpUntilType where
+    move m z = getFirst $ map (`move` z) $ take (level z) (castsUp m)
+        where castsUp :: UpUntilType c b -> [Up c b]
+              castsUp _ = [1..]
+
+              getFirst = listToMaybe . catMaybes
 
 
 -- TODO: when new 'thrist' supports arbitrary Arrow instance, we can derive
@@ -373,7 +381,7 @@ restore s = move s . zipper
 atTop :: Zipper a b -> Bool
 atTop = nullThrist . stack
 
--- | Return our depth in the 'Zipper'. if 'atTop' z then 'level' z == 0
+-- | Return our depth in the 'Zipper'. if 'atTop' z then @'level' z == 0@
 level :: Zipper a b -> Int
 level = lengthThrist . stack
 ----------------------------------------------------------------------------
