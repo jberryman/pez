@@ -270,10 +270,22 @@ instance ReturnMotion Up To where
 data CastUp c b = CastUp
 
 instance Motion CastUp where
+    move p z = snd <$> moveSaving p z
+    {-
     move m z = getFirst $ map (`move` z) $ take (level z) (castsUp m)
         where castsUp :: CastUp c b -> [Up c b]
               castsUp _ = [1..]
+              getFirst = listToMaybe . catMaybes
+    -}
 
+instance ReturnMotion CastUp To where
+    moveSaving p z = getFirst successfullMotions >>= 
+                      \(p',z')-> saveFromAbove p' z >>=
+                      \pRet'-> return (pRet',z')
+        where castsUp :: CastUp c b -> [Up c b]
+              castsUp _ = [1..]
+              motionsToTry = take (level z) (castsUp p)
+              successfullMotions = map (\m-> (m,)<$>move m z) motionsToTry
               getFirst = listToMaybe . catMaybes
 
 
