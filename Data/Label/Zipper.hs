@@ -118,16 +118,25 @@ module Data.Label.Zipper (
  -
  -
  -   TODO NOTES
- -
- -   - add UpCasting, UpTopmostCasting motions
+ -   - ReturnMotion --> ContraryMotions, BiMotions
+ -   - UpUntilType --> CastUp, UpToType, include Int argument for which level to ascend
+ -      to, perhaps make (CastUp -1) get us to the topmost level matching type.
+ -      Perhaps use this functionality in Up as well.
  -   - figure out a way to encapsulate doing a movement repeatedly:
  -      - new function move1 :: (Motion1 b)=> m b -> Zipper a b -> Maybe (Zipper a b)   
  -          (opportunities for some good stuff (see notes))
  -   - decide on minimal exports from Category and fclabels
  -   - update tests
+ -      - move (Up 0) == id
  -   - clean up documentation
  -   - release 0.1.0
  -
+ -   - other motion ideas:
+ -      - Up to the nth level of specified type
+ -      - up to the level of a specified type with focus matching predicate
+ -      - Up to topmost level matching type:
+ -      - repeat descend a :~> a (ToLast?)
+ -      - motion down a :~> a, until matching pred.
  -   - look at Arrow instance for thrist (in module yet)
  -   - make To an instance if Iso (if possible)
  -   - pure move functionality (either separate module/namespace or new
