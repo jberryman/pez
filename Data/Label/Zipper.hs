@@ -88,7 +88,7 @@ module Data.Label.Zipper (
     , zipper , close
     -- ** Moving around
     , Motion(..) , ReturnMotion(..)
-    , Up(..) , UpUntilType , To() , to
+    , Up(..) , CastUp(..) , To() , to
     -- ** Querying
     -- | a "fclabels" lens for setting, getting, and modifying the zipper's focus:
     , focus 
@@ -118,10 +118,6 @@ module Data.Label.Zipper (
  -
  -
  -   TODO NOTES
- -   - ReturnMotion --> ContraryMotions, BiMotions
- -   - UpUntilType --> CastUp, UpToType, include Int argument for which level to ascend
- -      to, perhaps make (CastUp -1) get us to the topmost level matching type.
- -      Perhaps use this functionality in Up as well.
  -   - figure out a way to encapsulate doing a movement repeatedly:
  -      - new function move1 :: (Motion1 b)=> m b -> Zipper a b -> Maybe (Zipper a b)   
  -          (opportunities for some good stuff (see notes))
@@ -271,11 +267,11 @@ instance ReturnMotion Up To where
 -- | indicates a 'Motion' upwards in the zipper until we arrive at a type which
 -- we can cast to @b@, returning 'Nothing' if we hit the top without a cast
 -- succeeding
-data UpUntilType c b = UpUntilType
+data CastUp c b = CastUp
 
-instance Motion UpUntilType where
+instance Motion CastUp where
     move m z = getFirst $ map (`move` z) $ take (level z) (castsUp m)
-        where castsUp :: UpUntilType c b -> [Up c b]
+        where castsUp :: CastUp c b -> [Up c b]
               castsUp _ = [1..]
 
               getFirst = listToMaybe . catMaybes
