@@ -25,7 +25,7 @@ module Data.Label.Zipper (
      > import Data.Label.Zipper
       
      Create a datatype, deriving an instance of the Typeable class, and generate a
-     lens using functions from fclabels:
+     lens using functions from "fclabels":
       
      > data Tree a = Node { 
      >     _leftNode :: Tree a
@@ -89,6 +89,10 @@ module Data.Label.Zipper (
     -- ** Moving around
     , Motion(..) , ReturnMotion(..)
     , Up(..) , CastUp(..) , To() , to
+    -- *** Repeating movements
+    , moveWhile
+    , moveUntil
+    , repeatMove
     -- ** Querying
     -- | a "fclabels" lens for setting, getting, and modifying the zipper's focus:
     , focus 
@@ -119,14 +123,29 @@ module Data.Label.Zipper (
  -
  -   TODO NOTES
  -   - figure out a way to encapsulate doing a movement repeatedly:
- -      - new function move1 :: (Motion1 b)=> m b -> Zipper a b -> Maybe (Zipper a b)   
- -          (opportunities for some good stuff (see notes))
+ -      - moveWhile :: (Motion m)=> (b -> Bool) -> m b b -> Zipper a b -> Zipper a b
+ -      - moveUntil :: (Motion m)=> (b -> Bool) -> m b b -> Zipper a b -> Maybe (Zipper a b)
+ -      - moves = moveWhile (const True)
+ -          or ..exhaust ?
+ -          or ..repeatMove ?
+ -
+ -   - make levels polymorphic over Zipper and To
+ -   - add motion down that collapses history
+ -      - newtype Squash a b = Squash (To a b) deriving (..)
+ -      or... make this reference 'flatten'? or change flatten to 'squash'?
+ -   - add modf = M.modify focus 
+ -         setf = M.set focus
+ -         viewf --> getf ?
  -   - decide on minimal exports from Category and fclabels
  -   - update tests
  -      - move (Up 0) == id
+ -      - ..
  -   - clean up documentation
  -   - release 0.1.0
  -
+ -   - pure move functionality (either separate module/namespace or new
+ -      function)
+ -      - pureMove :: (PureMotion m)=>
  -   - other motion ideas:
  -      - Up to the nth level of specified type
  -      - up to the level of a specified type with focus matching predicate
@@ -135,8 +154,6 @@ module Data.Label.Zipper (
  -      - motion down a :~> a, until matching pred.
  -   - look at Arrow instance for thrist (in module yet)
  -   - make To an instance if Iso (if possible)
- -   - pure move functionality (either separate module/namespace or new
- -      function)
  -   - Kleisli-wrapped arrow interface that works nicely with proc notation
  -   
  -   - look at usability and re-define/remove/add functions as needed, e.g.:
@@ -271,17 +288,10 @@ data CastUp c b = CastUp
 
 instance Motion CastUp where
     move p z = snd <$> moveSaving p z
-    {-
-    move m z = getFirst $ map (`move` z) $ take (level z) (castsUp m)
-        where castsUp :: CastUp c b -> [Up c b]
-              castsUp _ = [1..]
-              getFirst = listToMaybe . catMaybes
-    -}
 
 instance ReturnMotion CastUp To where
     moveSaving p z = getFirst successfullMotions >>= 
-                      \(p',z')-> saveFromAbove p' z >>=
-                      \pRet'-> return (pRet',z')
+                      \(p',z')-> (,z') <$> saveFromAbove p' z 
         where castsUp :: CastUp c b -> [Up c b]
               castsUp _ = [1..]
               motionsToTry = take (level z) (castsUp p)
@@ -319,6 +329,37 @@ to = S . flip Cons Nil . TL
 instance ReturnMotion To Up where
     moveSaving p z = (Up$ lengthThrist$ savedLenses p,) <$> move p z
 
+
+--------------- REPEATED MOTIONS -----------------
+
+-- | Apply the given Motion to a zipper until the Motion fails. For instance
+-- @repeatMove (to left) z@ might return the left-most node of a 'zipper'ed tree
+-- @z@.
+--
+-- > repeatMove = moveWhile (cost True)
+repeatMove :: (Motion m,Typeable a, Typeable b)=> m b b -> Zipper a b -> Zipper a b
+repeatMove = moveWhile (const True)
+
+-- TODO: SHOULD THIS FAIL WHEN PREDICATE MATCHES BUT WE CAN'T MOVE?
+-- | Apply a motion each time the focus matches the predicate AND the motion
+-- does not fail.
+moveWhile :: (Motion m,Typeable a, Typeable b)=> (b -> Bool) -> m b b -> Zipper a b -> Zipper a b
+moveWhile p m z | p $ viewf z = case move m z of
+                                     Nothing -> z
+                                     Just z' -> moveWhile p m z'
+                | otherwise   = z
+
+-- | Apply a motion until the predicate matches or the motion fails, returning
+-- Nothing if a 'move' fails before we reach a focus that matches the predicate.
+moveUntil :: (Motion m,Typeable a, Typeable b)=> (b -> Bool) -> m b b -> Zipper a b -> Maybe (Zipper a b)
+moveUntil p m z = case move m z of
+                       Nothing -> Nothing
+                       Just z' -> if p $ viewf z'
+                                    then Just z'
+                                    else moveUntil p m z'
+
+
+--------------- 
 
 -- | create a zipper with the focus on the top level.
 zipper :: a -> Zipper a a
