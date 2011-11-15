@@ -335,28 +335,26 @@ instance ReturnMotion To Up where
 -- | Apply the given Motion to a zipper until the Motion fails. For instance
 -- @repeatMove (to left) z@ might return the left-most node of a 'zipper'ed tree
 -- @z@.
---
--- > repeatMove = moveWhile (cost True)
-repeatMove :: (Motion m,Typeable a, Typeable b)=> m b b -> Zipper a b -> Zipper a b
-repeatMove = moveWhile (const True)
+-- 
+-- > repeatMove m z = maybe z (repeatMove m) $ move m z
+repeatMove :: (Motion m,Typeable a, Typeable b)=> 
+                 m b b -> Zipper a b -> Zipper a b
+repeatMove m z = maybe z (repeatMove m) (move m z)
 
--- TODO: SHOULD THIS FAIL WHEN PREDICATE MATCHES BUT WE CAN'T MOVE?
--- | Apply a motion each time the focus matches the predicate AND the motion
--- does not fail.
-moveWhile :: (Motion m,Typeable a, Typeable b)=> (b -> Bool) -> m b b -> Zipper a b -> Zipper a b
-moveWhile p m z | p $ viewf z = case move m z of
-                                     Nothing -> z
-                                     Just z' -> moveWhile p m z'
-                | otherwise   = z
+-- | Apply a motion each time the focus matches the predicate, returning
+-- @Nothing@ if a Motion fails.
+moveWhile :: (Motion m,Typeable a, Typeable b)=> 
+              (b -> Bool) -> m b b -> Zipper a b -> Maybe (Zipper a b)
+moveWhile p m z | p $ viewf z = move m z >>= moveWhile p m
+                | otherwise   = return z
 
 -- | Apply a motion until the predicate matches or the motion fails, returning
 -- Nothing if a 'move' fails before we reach a focus that matches the predicate.
-moveUntil :: (Motion m,Typeable a, Typeable b)=> (b -> Bool) -> m b b -> Zipper a b -> Maybe (Zipper a b)
-moveUntil p m z = case move m z of
-                       Nothing -> Nothing
-                       Just z' -> if p $ viewf z'
-                                    then Just z'
-                                    else moveUntil p m z'
+moveUntil :: (Motion m,Typeable a, Typeable b)=> 
+                 (b -> Bool) -> m b b -> Zipper a b -> Maybe (Zipper a b)
+moveUntil p m z = move m z >>= maybeLoop
+    where maybeLoop z' | p $ viewf z' = return z'
+                       | otherwise    = moveUntil p m z'
 
 
 --------------- 
