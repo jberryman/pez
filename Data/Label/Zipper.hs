@@ -88,7 +88,8 @@ module Data.Label.Zipper (
     , zipper , close
     -- ** Moving around
     , Motion(..) , ReturnMotion(..)
-    , Up(..) , CastUp(..) , To() , to
+    , Up(..) , CastUp(..) , To() , to 
+    --, Flatten(..)
     -- *** Repeating movements
     , moveWhile
     , moveUntil
@@ -122,17 +123,7 @@ module Data.Label.Zipper (
  -
  -
  -   TODO NOTES
- -   - figure out a way to encapsulate doing a movement repeatedly:
- -      - moveWhile :: (Motion m)=> (b -> Bool) -> m b b -> Zipper a b -> Zipper a b
- -      - moveUntil :: (Motion m)=> (b -> Bool) -> m b b -> Zipper a b -> Maybe (Zipper a b)
- -      - moves = moveWhile (const True)
- -          or ..exhaust ?
- -          or ..repeatMove ?
- -
- -   - make levels polymorphic over Zipper and To
- -   - add motion down that collapses history
- -      - newtype Squash a b = Squash (To a b) deriving (..)
- -      or... make this reference 'flatten'? or change flatten to 'squash'?
+ -   - level -> levels (make polymorphic)
  -   - add modf = M.modify focus 
  -         setf = M.set focus
  -         viewf --> getf ?
@@ -146,6 +137,7 @@ module Data.Label.Zipper (
  -   - pure move functionality (either separate module/namespace or new
  -      function)
  -      - pureMove :: (PureMotion m)=>
+ -   - add Flatten motion down that collapses history
  -   - other motion ideas:
  -      - Up to the nth level of specified type
  -      - up to the level of a specified type with focus matching predicate
@@ -330,6 +322,22 @@ instance ReturnMotion To Up where
     moveSaving p z = (Up$ lengthThrist$ savedLenses p,) <$> move p z
 
 
+{-  TODO for next version
+-- | a 'Motion' \"down\" that squashes the saved history of the motion, so for
+-- instance:
+--
+-- > level $ move (Flatten l) z  ==  level z
+--
+-- and:
+--
+-- > move (Up 1) z  ==  move (Up 1) $ move (Flatten l) z
+newtype Flatten a b = Flatten (To a b) 
+    deriving (Typeable, Category)
+
+instance Motion Flatten where
+    move m z = undefined --flip (foldMThrist pivot) . savedLenses  
+-}
+
 --------------- REPEATED MOTIONS -----------------
 
 -- | Apply the given Motion to a zipper until the Motion fails. For instance
@@ -440,6 +448,7 @@ atTop = nullThrist . stack
 -- | Return our depth in the 'Zipper'. if 'atTop' z then @'level' z == 0@
 level :: Zipper a b -> Int
 level = lengthThrist . stack
+
 ----------------------------------------------------------------------------
 
 
