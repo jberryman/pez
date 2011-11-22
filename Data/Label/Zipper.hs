@@ -94,10 +94,11 @@ module Data.Label.Zipper (
     , moveWhile
     , moveUntil
     , repeatMove
-    -- ** Querying
+    -- ** Querying Zippers and Motions
     -- | a "fclabels" lens for setting, getting, and modifying the zipper's focus:
     , focus 
     , viewf , atTop , level
+    , LevelDelta(..)
     -- ** Saving and recalling positions in a Zipper
     , save , closeSaving
     , restore , flatten   
@@ -123,10 +124,17 @@ module Data.Label.Zipper (
  -
  -
  -   TODO NOTES
+ -   - rename LevelDelta -> LevelDelta?
+ -   - should we make num instance for Up be negative numbers? 
+ -      - Up 2 == (-2)
  -   - level -> levels (make polymorphic)
+ -      - or... keep level the same but make a polymorphic type 'delta'
+ -      - or... change level -> delta ? (i.e. the "difference from unzippered
+ -         type" ?
  -   - add modf = M.modify focus 
  -         setf = M.set focus
  -         viewf --> getf ?
+ -   - use most recent thrist with Arrow instance, address related TODO
  -   - decide on minimal exports from Category and fclabels
  -   - update tests
  -      - move (Up 0) == id
@@ -134,10 +142,13 @@ module Data.Label.Zipper (
  -   - clean up documentation
  -   - release 0.1.0
  -
+ -   - NEXT TODO
+ -   ------------
  -   - pure move functionality (either separate module/namespace or new
  -      function)
  -      - pureMove :: (PureMotion m)=>
- -   - add Flatten motion down that collapses history
+ -   - add Flatten motion down that collapses history?
+ -      - doesn't make sense for motion from top level. return Nothing?
  -   - other motion ideas:
  -      - Up to the nth level of specified type
  -      - up to the level of a specified type with focus matching predicate
@@ -147,22 +158,11 @@ module Data.Label.Zipper (
  -   - look at Arrow instance for thrist (in module yet)
  -   - make To an instance if Iso (if possible)
  -   - Kleisli-wrapped arrow interface that works nicely with proc notation
- -   
- -   - look at usability and re-define/remove/add functions as needed, e.g.:
- -       - Create a 'moveUntil' function, or something else to capture the ugly:
- -              descend z@(viewf -> Gong) = z
- -              descend z                 = descend $ moveTo tock z
- -         ...perhaps we can make something clever using property of pattern match
- -         failure in 'do' block?
- -         - SEE IF ArrowChoice MIGHT GET US CLOSE TO WHAT WE WANT
  -
- -   - Separate module: Data.Record.Label.Prelude that
- -   exports labels for haskell builtin types. Ask S. V. if he wantd to include
- -   it with fclabels.
- -
+ -   PERFORMANCE TODO
+ -   -----------------
  -   - consider instead of using section, use head form of parent with
- -   the child node set to undefined. Any performance difference?
- -
+ -     the child node set to undefined. Any performance difference?
  -   - actually look at how this performs in terms of space/time
  -
  -   ROADMAP:
@@ -445,9 +445,31 @@ restore s = move s . zipper
 atTop :: Zipper a b -> Bool
 atTop = nullThrist . stack
 
--- | Return our depth in the 'Zipper'. if 'atTop' z then @'level' z == 0@
+
+-- | Return our zero-indexed depth in the 'Zipper'. 
+-- if 'atTop' zipper then @'level' zipper == 0@
 level :: Zipper a b -> Int
 level = lengthThrist . stack
+
+-- | Motion types which alter a Zipper by a knowable integer quantity.
+-- Concretly, the following should hold:
+--
+-- > level (move m z) == level z + delta m
+--
+-- For motions upwards this returns a negative value.
+class (Motion m)=> LevelDelta m where
+    delta :: (Typeable a, Typeable b)=>m a b -> Int
+
+instance LevelDelta Up where
+    delta = negate . upLevel
+
+instance LevelDelta To where
+    delta = lengthThrist . savedLenses
+
+{- TODO maybe in next version
+instance LevelDelta Flatten where
+    delta = const 0
+-}
 
 ----------------------------------------------------------------------------
 
