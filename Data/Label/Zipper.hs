@@ -124,18 +124,12 @@ module Data.Label.Zipper (
  -
  -
  -   TODO NOTES
- -   - rename LevelDelta -> LevelDelta?
- -   - should we make num instance for Up be negative numbers? 
- -      - Up 2 == (-2)
- -   - level -> levels (make polymorphic)
- -      - or... keep level the same but make a polymorphic type 'delta'
- -      - or... change level -> delta ? (i.e. the "difference from unzippered
- -         type" ?
  -   - add modf = M.modify focus 
  -         setf = M.set focus
  -         viewf --> getf ?
- -   - use most recent thrist with Arrow instance, address related TODO
+ -   - branch and experiment with moving from Maybe to Either Error 
  -   - decide on minimal exports from Category and fclabels
+ -      - ...
  -   - update tests
  -      - move (Up 0) == id
  -      - ..
@@ -144,6 +138,7 @@ module Data.Label.Zipper (
  -
  -   - NEXT TODO
  -   ------------
+ -   - can we define appropriate instances to allow, e.g. `move -2` ?
  -   - pure move functionality (either separate module/namespace or new
  -      function)
  -      - pureMove :: (PureMotion m)=>
@@ -257,7 +252,30 @@ class (Motion p, Motion p')=> ReturnMotion p p' | p -> p' where
 -- the grandparent level, as long as the type of the focus after moving is 
 -- @b@.
 newtype Up c b = Up { upLevel :: Int }
-    deriving (Show,Eq,Num,Ord,Integral,Bounded,Enum,Real)
+    deriving (Show,Num,Integral,Eq,Ord,Bounded,Enum,Real)
+
+{-
+--TODO: THIS IS PROBABLY NOT A GGOD IDEA UNLESS WE CAN DO IT RIGHT. AT THE
+--MOMENT I DON'T UNDERSTAND HOW GHC DOES SOMETHING LIKE:
+--      [-1,-2..-3] :: [ Up Int Int]
+-- BUT THE FOLLOWING CODE ISN'T ENOUGH. FOR NOW DERIVE NUMERIC CLASSES ABOVE AND
+-- DO NOT DOCUMENT USING `move 3`.
+-- | 'fromInteger' gets defined as @Up . abs@, so @move (Up 2)@ is equivalent to
+-- @move (-2)@.
+instance Num (Up a b) where
+    (Up a) + (Up b) = Up $ a+b
+    (Up a) - (Up b) = Up $ a-b
+    (Up a) * (Up b) = Up $ a*b
+    abs (Up n)      = Up $ abs n
+    signum (Up n)   = Up $ signum n
+    fromInteger n   = Up $ fromInteger $ abs n
+
+instance Integral (Up a b) where
+    toInteger (Up n) = toInteger $ negate $ abs n
+    quotRem (Up a) (Up b) = (Up $ quot a b, Up $ rem a b)
+
+-- also need fromEnum and fromIntegral?
+-}
 
 instance Category Up where
     (Up m) . (Up n) = Up (m+n)
@@ -290,9 +308,6 @@ instance ReturnMotion CastUp To where
               successfullMotions = map (\m-> (m,)<$>move m z) motionsToTry
               getFirst = listToMaybe . catMaybes
 
-
--- TODO: when new 'thrist' supports arbitrary Arrow instance, we can derive
--- Arrow and ArrowChoice / ArrowZero here:
 
 -- | A 'Motion' type describing an incremental path \"down\" through a data
 -- structure. This can be used with 'restore' to return to a previously-visited
