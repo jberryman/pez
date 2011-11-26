@@ -94,10 +94,12 @@ module Data.Label.Zipper (
     , moveWhile
     , moveUntil
     , repeatMove
-    -- ** Querying Zippers and Motions
+    -- ** The zipper focus
     -- | a "fclabels" lens for setting, getting, and modifying the zipper's focus:
     , focus 
-    , viewf , atTop , level
+    , viewf , setf , modf
+    -- ** Querying Zippers and Motions
+    , atTop , level
     , LevelDelta(..)
     -- ** Saving and recalling positions in a Zipper
     , save , closeSaving
@@ -124,9 +126,6 @@ module Data.Label.Zipper (
  -
  -
  -   TODO NOTES
- -   - add modf = M.modify focus 
- -         setf = M.set focus
- -         viewf --> getf ?
  -   - branch and experiment with moving from Maybe to Either Error 
  -   - decide on minimal exports from Category and fclabels
  -      - ...
@@ -493,11 +492,23 @@ instance LevelDelta Flatten where
     -- CONVENIENCE
     ----------------
 
--- | a view function for a 'Zipper'\'s focus.
+-- | a view function for a Zipper\'s 'focus'.
 --
 -- > viewf = get focus
 viewf :: Zipper a b -> b
 viewf = get focus
+
+-- | modify the Zipper\'s 'focus'.
+--
+-- > modf = modify focus
+modf :: (b -> b) -> Zipper a b -> Zipper a b
+modf = modify focus
+
+-- | set the Zipper\'s 'focus'.
+-- 
+-- > setf = set focus
+setf :: b -> Zipper a b -> Zipper a b
+setf = set focus
 
 -- | a simple type synonym for a 'Zipper' where the type at the focus is the
 -- same as the type of the outer (unzippered) type. Cleans up type signatures
