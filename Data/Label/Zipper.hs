@@ -126,7 +126,6 @@ module Data.Label.Zipper (
  -
  -
  -   TODO NOTES
- -   - branch and experiment with moving from Maybe to Either Error 
  -   - decide on minimal exports from Category and fclabels
  -      - ...
  -   - update tests
@@ -141,6 +140,7 @@ module Data.Label.Zipper (
  -   - pure move functionality (either separate module/namespace or new
  -      function)
  -      - pureMove :: (PureMotion m)=>
+ -   - conversion from motions to fclabels (:~>)
  -   - add Flatten motion down that collapses history?
  -      - doesn't make sense for motion from top level. return Nothing?
  -   - other motion ideas:
@@ -180,6 +180,7 @@ import Prelude hiding ((.), id)
 import Control.Applicative
 import Control.Arrow(Kleisli(..))
 import Data.Maybe
+import Control.Failure
 
 
     -------------------------
@@ -227,21 +228,32 @@ $(mkLabels [''Zipper])
 -- MOTION CLASSES --
 --------------------
 
+-- | Defines a relation between a Motion type and the exceptions it can throw.
+-- The type of the motion @p@ uniquely determines the exception type @err@
+class (Motion p)=> MoveThrows err p | p -> err
 
--- | Types of the Motion class act as references to \"paths\" up or down 
--- through a datatype.
+-- TODO: can we say Typeable2 for p b c??
+
+-- | Types of the Motion class describe \"paths\" up or down through a 
+-- datatype. Each Motions\' associated exceptions are indicated by the 
+-- dependent type @err@.
 class Motion p where
-    -- | Move through the structure to the label specified, returning 'Nothing'
-    -- if the motion is invalid.
-    move :: (Typeable b, Typeable c) => 
-                p b c -> Zipper a b -> Maybe (Zipper a c)
+    -- | Move to a new location in the zipper, either returning the new zipper,
+    -- or throwing @err@ in some @Failure@ class type (from the "failure" pkg.)
+    --
+    -- The return type can be treated as @Maybe@ for simple exception handling
+    -- or one can even use something like "control-monad-exception" to get 
+    -- powerful typed, checked exceptions.
+    move :: (Typeable b, Typeable c, MoveThrows err p, Failure err f) => 
+                p b c -> Zipper a b -> f (Zipper a c)
 
--- | Defines a relation between a 'Motion' type @p@ and its return motion @p'@.
+
+-- | A relation between a 'Motion' type @p@ and its return motion @p'@.
 class (Motion p, Motion p')=> ReturnMotion p p' | p -> p' where
     -- | like 'move' but saves the @Motion@ that will return us back to the 
     -- location we started from in the passed zipper.
-    moveSaving :: (Typeable b, Typeable c) => 
-                    p b c -> Zipper a b -> Maybe (p' c b, Zipper a c)
+    moveSaving :: (Typeable b, Typeable c, MoveThrows err p, Failure err f) => 
+                    p b c -> Zipper a b -> f (p' c b, Zipper a c)
 
 
 -- MOTIONS

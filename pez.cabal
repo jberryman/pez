@@ -24,6 +24,7 @@ Description:         PEZ is a generic zipper library. It uses lenses from the "f
                      >  - savedLens renamed flatten
                      >  - SavedPath renamed To
                      >  - removed experimental operators
+                     >  - using failure package for exceptions
                      .
  
 
@@ -58,6 +59,7 @@ Library
   Build-depends:       base >= 4 && < 5
                      , fclabels >= 1.0
                      , thrist >= 0.2 && < 0.3
+                     , failure >= 0.1
 
   Extensions:        GeneralizedNewtypeDeriving
                    , TypeOperators
