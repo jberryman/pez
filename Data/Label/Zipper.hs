@@ -87,8 +87,8 @@ module Data.Label.Zipper (
     -- ** Creating and closing Zippers
     , zipper , close
     -- ** Moving around
-    , Motion(..) , ReturnMotion(..)
-    , Up(..) , CastUp(..) , To() , to 
+    , Motion(..) 
+    , Up(..) , UpCasting(..) , To() , to 
     --, Flatten(..)
     -- *** Repeating movements
     , moveWhile
@@ -232,29 +232,29 @@ $(mkLabels [''Zipper])
 --------------------
 
 
--- TODO: would an associated type work better here so we can constrain
--- ReturnMotion in head?
-
 -- | Types of the Motion class describe \"paths\" up or down (so to speak)
--- through a datatype. Each Motions\'s associated exceptions are indicated by
--- the dependent type @err@.
-class Motion mot err | mot -> err where
+-- through a datatype. The exceptions thrown by each motion are enumerated in
+-- the associated type @ThrownBy mot@. The @Motion@ type that will return the
+-- focus to the last location after doing a 'moveSaving is given by @Returning mot@.
+class (Exception (ErrThrownBy mot), Motion (Returning mot))=> Motion mot where
+    type ThrownBy mot
+    type Returning mot
+
     -- | Move to a new location in the zipper, either returning the new zipper,
     -- or throwing @err@ in some @Failure@ class type (from the "failure" pkg.)
     --
     -- The return type can be treated as @Maybe@ for simple exception handling
     -- or one can even use something like "control-monad-exception" to get 
     -- powerful typed, checked exceptions.
-    move :: (Typeable b, Typeable c, Failure err m) => 
+    move :: (Typeable b, Typeable c, Failure (ThrownBy mot) m) => 
                 mot b c -> Zipper a b -> m (Zipper a c)
+    move mot z = moveSaving mot z >>= return . snd
 
-
--- | A relation between a 'Motion' type @p@ and its return motion @p'@.
-class ReturnMotion mot mot' | mot -> mot' where
     -- | like 'move' but saves the @Motion@ that will return us back to the 
     -- location we started from in the passed zipper.
-    moveSaving :: (Typeable b, Typeable c, Motion mot err, Failure err m) => 
-                    mot b c -> Zipper a b -> m (mot' c b, Zipper a c)
+    moveSaving :: (Typeable b, Typeable c, Failure (ThrownBy mot) m) => 
+                    mot b c -> Zipper a b -> m ((Returning mot) c b, Zipper a c)
+
 
 
 -- MOTIONS
@@ -262,7 +262,7 @@ class ReturnMotion mot mot' | mot -> mot' where
 
 -- | a 'Motion' upwards in the data type. e.g. @move (Up 2)@ would move up to
 -- the grandparent level, as long as the type of the focus after moving is 
--- @b@. This 'Motion' type throws 'UpException'
+-- @b@. This 'Motion' type throws 'UpErrors'
 newtype Up c b = Up { upLevel :: Int }
     deriving (Show,Num,Integral,Eq,Ord,Bounded,Enum,Real)
 
@@ -271,7 +271,6 @@ data UpErrors = CastFailed
               | LensSetterFailed
               deriving (Show,Typeable,Eq)
 
-instance Exception UpErrors
 
 {-
 --TODO: THIS IS PROBABLY NOT A GGOD IDEA UNLESS WE CAN DO IT RIGHT. AT THE
@@ -301,42 +300,56 @@ instance Category Up where
     id              = 0
 
 instance Motion Up where
-    move (Up 0)  z = gcast z
+    type ThrownBy Up = UpErrors
+    type Returning Up = To
+
+    move (Up 0)  z = 
+        maybeThrow CastFailed $ gcast z
     move (Up n) (Z (Cons (H _ k) stck) c) = 
-        runKleisli k c >>= move (Up (n-1)) . Z stck
-    move _       _ = Nothing  
+        maybeThrow LensSetterFailed (runKleisli k c) >>= 
+        move (Up (n-1)) . Z stck
+    move _ _ = 
+        failure AlreadyAtTop
 
-instance ReturnMotion Up To where
-    moveSaving p z = (,) <$> saveFromAbove p z <*> move p z
-
+    moveSaving p z = do z' <- move p z
+                        motS <- saveFromAbove p z
+                        return (motS,z')
 
 -- | indicates a 'Motion' upwards in the zipper until we arrive at a type which
--- we can cast to @b@, otherwise throwing 'CastUpErrors'
-data CastUp c b = CastUp
+-- we can cast to @b@, otherwise throwing 'UpCastingErrors'
+data UpCasting c b = UpCasting
+    deriving(Show,Typeable,Eq)
 
-data AllCastsFailed = AllCastsFailed
+data UpCastingErrors = AllCastsFailed
+    deriving (Show,Typeable,Eq)
 
-instance Motion CastUp where
-    move p z = snd <$> moveSaving p z
+instance Motion UpCasting where
+    type ThrownBy UpCasting = UpCastingErrors
+    type Returning UpCasting = To
 
-instance ReturnMotion CastUp To where
-    moveSaving p z = getFirst successfullMotions >>= 
-                      \(p',z')-> (,z') <$> saveFromAbove p' z 
-        where castsUp :: CastUp c b -> [Up c b]
-              castsUp _ = [1..]
-              motionsToTry = take (level z) (castsUp p)
-              successfullMotions = map (\m-> (m,)<$>move m z) motionsToTry
-              getFirst = listToMaybe . catMaybes
+    moveSaving p z = do 
+        (p',z') <- getFirst successfullMotions
+        motS <- saveFromAbove p' z
+        return (motS,z')
+      where castsUp :: UpCasting c b -> [Up c b]
+            castsUp _ = [1..]
+            motionsToTry = take (level z) (castsUp p)
+            successfullMotions = map (\m-> move m z >>= (m,)) motionsToTry
+            getFirst = maybeThrow AllCastsFailed . listToMaybe . catMaybes
 
 
 -- | A 'Motion' type describing an incremental path \"down\" through a data
--- structure. This can be used with 'restore' to return to a previously-visited
--- location in a zipper, so...
+-- structure. Use 'to' to move to a location specified by a "fclabels" lens.
+--
+-- Use 'restore' to return to a previously-visited location in a zipper, with
+-- previous history intact, so:
 --
 -- > (\(l,ma)-> move l <$> ma) (closeSaving z)  ==  Just z
 --
 -- Use 'flatten' to turn this into a standard fclabels lens, flattening the
 -- incremental move steps.
+--
+-- Throws errors of type 'ToErrors':
 newtype To a b = S { savedLenses :: Thrist TypeableLens a b } 
     deriving (Typeable, Category)
 
@@ -346,15 +359,24 @@ data TypeableLens a b where
     TL :: (Typeable a,Typeable b)=> { tLens :: (a M.:~> b)
                                     } -> TypeableLens a b
 
+-- TODO: we might store some info here re. at what level the error occured:
+data ToErrors = LensGetterFailed
+    deriving(Show,Typeable,Eq)
+
 instance Motion To where
+    type ThrownBy To = ToErrors
+    type Returning To = Up
+
     move = flip (foldMThrist pivot) . savedLenses  
+
+    moveSaving p z = do z' <- move p z
+                        let motS = Up $ lengthThrist $ savedLenses p
+                        return (motS,z')
 
 -- | use a "fclabels" label to define a Motion \"down\" into a data type.
 to :: (Typeable a, Typeable b)=> (a M.:~> b) -> To a b
 to = S . flip Cons Nil . TL
 
-instance ReturnMotion To Up where
-    moveSaving p z = (Up$ lengthThrist$ savedLenses p,) <$> move p z
 
 
 {-  TODO for next version
@@ -574,16 +596,20 @@ lengthThrist :: Thrist (+>) a b -> Int
 lengthThrist = getInt . foldrThrist plusB (IntB 0) . mapThrist (const $ IntB 1)
 
 
+maybeThrow :: (Failure e m)=> e -> Maybe a -> m a
+maybeThrow e = maybe (Failure e) return
+
+
     ----------------------
     -- EXCEPTION HIERARCHY
     ----------------------
-{-
+
 -- NOTE: a 'Throws' hierarchy must be defined manually for c-m-e. Perhaps we
 -- should create a separate package with those instances defined
 
 --ROOT:
 data MoveException = forall e . Exception e => MoveException e
-     deriving Typeable
+     deriving (Typeable
 
 instance Show MoveException where
     show (MoveException e) = show e
@@ -594,4 +620,8 @@ instance Exception MoveException
 data UpException
 
 data DownException
--}
+
+-- PER-MOTION EXCEPTIONS:
+instance Exception UpErrors where
+instance Exception UpCastingErrors where
+instance Exception ...
