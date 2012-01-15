@@ -126,6 +126,8 @@ module Data.Label.Zipper (
  -
  -
  -   TODO NOTES
+ -   - define an exception type for each motion
+ -   - define hierarchy of Exceptions of these types
  -   - decide on minimal exports from Category and fclabels
  -      - ...
  -   - update tests
@@ -181,6 +183,7 @@ import Control.Applicative
 import Control.Arrow(Kleisli(..))
 import Data.Maybe
 import Control.Failure
+import Control.Exception
 
 
     -------------------------
@@ -228,32 +231,30 @@ $(mkLabels [''Zipper])
 -- MOTION CLASSES --
 --------------------
 
--- | Defines a relation between a Motion type and the exceptions it can throw.
--- The type of the motion @p@ uniquely determines the exception type @err@
-class (Motion p)=> MoveThrows err p | p -> err
 
--- TODO: can we say Typeable2 for p b c??
+-- TODO: would an associated type work better here so we can constrain
+-- ReturnMotion in head?
 
--- | Types of the Motion class describe \"paths\" up or down through a 
--- datatype. Each Motions\' associated exceptions are indicated by the 
--- dependent type @err@.
-class Motion p where
+-- | Types of the Motion class describe \"paths\" up or down (so to speak)
+-- through a datatype. Each Motions\'s associated exceptions are indicated by
+-- the dependent type @err@.
+class Motion mot err | mot -> err where
     -- | Move to a new location in the zipper, either returning the new zipper,
     -- or throwing @err@ in some @Failure@ class type (from the "failure" pkg.)
     --
     -- The return type can be treated as @Maybe@ for simple exception handling
     -- or one can even use something like "control-monad-exception" to get 
     -- powerful typed, checked exceptions.
-    move :: (Typeable b, Typeable c, MoveThrows err p, Failure err f) => 
-                p b c -> Zipper a b -> f (Zipper a c)
+    move :: (Typeable b, Typeable c, Failure err m) => 
+                mot b c -> Zipper a b -> m (Zipper a c)
 
 
 -- | A relation between a 'Motion' type @p@ and its return motion @p'@.
-class (Motion p, Motion p')=> ReturnMotion p p' | p -> p' where
+class ReturnMotion mot mot' | mot -> mot' where
     -- | like 'move' but saves the @Motion@ that will return us back to the 
     -- location we started from in the passed zipper.
-    moveSaving :: (Typeable b, Typeable c, MoveThrows err p, Failure err f) => 
-                    p b c -> Zipper a b -> f (p' c b, Zipper a c)
+    moveSaving :: (Typeable b, Typeable c, Motion mot err, Failure err m) => 
+                    mot b c -> Zipper a b -> m (mot' c b, Zipper a c)
 
 
 -- MOTIONS
@@ -261,9 +262,16 @@ class (Motion p, Motion p')=> ReturnMotion p p' | p -> p' where
 
 -- | a 'Motion' upwards in the data type. e.g. @move (Up 2)@ would move up to
 -- the grandparent level, as long as the type of the focus after moving is 
--- @b@.
+-- @b@. This 'Motion' type throws 'UpException'
 newtype Up c b = Up { upLevel :: Int }
     deriving (Show,Num,Integral,Eq,Ord,Bounded,Enum,Real)
+
+data UpErrors = CastFailed
+              | AlreadyAtTop
+              | LensSetterFailed
+              deriving (Show,Typeable,Eq)
+
+instance Exception UpErrors
 
 {-
 --TODO: THIS IS PROBABLY NOT A GGOD IDEA UNLESS WE CAN DO IT RIGHT. AT THE
@@ -303,9 +311,10 @@ instance ReturnMotion Up To where
 
 
 -- | indicates a 'Motion' upwards in the zipper until we arrive at a type which
--- we can cast to @b@, returning 'Nothing' if we hit the top without a cast
--- succeeding
+-- we can cast to @b@, otherwise throwing 'CastUpErrors'
 data CastUp c b = CastUp
+
+data AllCastsFailed = AllCastsFailed
 
 instance Motion CastUp where
     move p z = snd <$> moveSaving p z
@@ -563,3 +572,26 @@ plusB a b = IntB (getInt a + getInt b)
 
 lengthThrist :: Thrist (+>) a b -> Int
 lengthThrist = getInt . foldrThrist plusB (IntB 0) . mapThrist (const $ IntB 1)
+
+
+    ----------------------
+    -- EXCEPTION HIERARCHY
+    ----------------------
+{-
+-- NOTE: a 'Throws' hierarchy must be defined manually for c-m-e. Perhaps we
+-- should create a separate package with those instances defined
+
+--ROOT:
+data MoveException = forall e . Exception e => MoveException e
+     deriving Typeable
+
+instance Show MoveException where
+    show (MoveException e) = show e
+
+instance Exception MoveException
+
+-- CHILDREN:
+data UpException
+
+data DownException
+-}
