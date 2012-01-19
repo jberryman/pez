@@ -1,6 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, TypeOperators, TemplateHaskell,
 GADTs, DeriveDataTypeable, TupleSections,
-MultiParamTypeClasses, FunctionalDependencies #-}
+MultiParamTypeClasses, 
+TypeFamilies, FlexibleContexts #-}
 
 {- |
 PEZ is a generic zipper library. It uses lenses from the "fclabels" package to
@@ -181,7 +182,7 @@ import Control.Category
 import Prelude hiding ((.), id)
 import Control.Applicative
 import Control.Arrow(Kleisli(..))
-import Data.Maybe
+import Control.Monad
 import Control.Failure
 import Control.Exception
 
@@ -231,14 +232,18 @@ $(mkLabels [''Zipper])
 -- MOTION CLASSES --
 --------------------
 
+--TODO NOTE: this is the class we would like, however this causes a cycle
+--because of superclass declaration of Motion. see this thread: 
+--    http://www.haskell.org/pipermail/glasgow-haskell-users/2011-July/020585.html
+--class (Exception (ThrownBy mot), Motion (Returning mot))=> Motion mot where
 
 -- | Types of the Motion class describe \"paths\" up or down (so to speak)
 -- through a datatype. The exceptions thrown by each motion are enumerated in
 -- the associated type @ThrownBy mot@. The @Motion@ type that will return the
 -- focus to the last location after doing a 'moveSaving is given by @Returning mot@.
-class (Exception (ErrThrownBy mot), Motion (Returning mot))=> Motion mot where
-    type ThrownBy mot
-    type Returning mot
+class (Exception (ThrownBy mot))=> Motion mot where
+    type ThrownBy mot :: *
+    type Returning mot :: * -> * -> *
 
     -- | Move to a new location in the zipper, either returning the new zipper,
     -- or throwing @err@ in some @Failure@ class type (from the "failure" pkg.)
@@ -311,31 +316,32 @@ instance Motion Up where
     move _ _ = 
         failure AlreadyAtTop
 
-    moveSaving p z = do z' <- move p z
-                        motS <- saveFromAbove p z
-                        return (motS,z')
+    -- TODO: it makes more sense to define 'move' and 'saveFromAbove' in terms
+    -- of moveSaving below, but we ran into some type weirdness, so...
+    moveSaving p z = liftM2 (,) (saveFromAbove p z) (move p z)
+
 
 -- | indicates a 'Motion' upwards in the zipper until we arrive at a type which
--- we can cast to @b@, otherwise throwing 'UpCastingErrors'
+-- we can cast to @b@, otherwise throwing 'UpErrors'
 data UpCasting c b = UpCasting
     deriving(Show,Typeable,Eq)
 
-data UpCastingErrors = AllCastsFailed
-    deriving (Show,Typeable,Eq)
 
 instance Motion UpCasting where
-    type ThrownBy UpCasting = UpCastingErrors
+    type ThrownBy UpCasting = UpErrors
     type Returning UpCasting = To
 
     moveSaving p z = do 
-        (p',z') <- getFirst successfullMotions
-        motS <- saveFromAbove p' z
-        return (motS,z')
-      where castsUp :: UpCasting c b -> [Up c b]
-            castsUp _ = [1..]
-            motionsToTry = take (level z) (castsUp p)
-            successfullMotions = map (\m-> move m z >>= (m,)) motionsToTry
-            getFirst = maybeThrow AllCastsFailed . listToMaybe . catMaybes
+        when (atTop z) $ failure AlreadyAtTop
+        firstSuccess $ map (flip ms z) [Up 1 ..]
+        where ms = moveSaving :: (Typeable b, Typeable c)=>Up c b -> Zipper a c -> Either UpErrors (To b c, Zipper a b)
+              firstSuccess []                            = failure CastFailed
+               -- this would be raised on each of it's ancestors: 
+              firstSuccess ((Left LensSetterFailed):_) = failure LensSetterFailed
+               -- if cast failed, skip:
+              firstSuccess ((Left CastFailed):zms)     = firstSuccess zms
+              firstSuccess ((Right (m,z')):_)          = return (m,z')
+              firstSuccess _ = error "bug in move UpCasting"
 
 
 -- | A 'Motion' type describing an incremental path \"down\" through a data
@@ -367,7 +373,8 @@ instance Motion To where
     type ThrownBy To = ToErrors
     type Returning To = Up
 
-    move = flip (foldMThrist pivot) . savedLenses  
+    move mot z = maybeThrow LensGetterFailed $ 
+        foldMThrist pivot z $ savedLenses mot
 
     moveSaving p z = do z' <- move p z
                         let motS = Up $ lengthThrist $ savedLenses p
@@ -397,6 +404,8 @@ instance Motion Flatten where
 
 --------------- REPEATED MOTIONS -----------------
 
+-- TODO: or call this moveFloor?
+
 -- | Apply the given Motion to a zipper until the Motion fails. For instance
 -- @repeatMove (to left) z@ might return the left-most node of a 'zipper'ed tree
 -- @z@.
@@ -406,17 +415,18 @@ repeatMove :: (Motion m,Typeable a, Typeable b)=>
                  m b b -> Zipper a b -> Zipper a b
 repeatMove m z = maybe z (repeatMove m) (move m z)
 
--- | Apply a motion each time the focus matches the predicate, returning
--- @Nothing@ if a Motion fails.
-moveWhile :: (Motion m,Typeable a, Typeable b)=> 
-              (b -> Bool) -> m b b -> Zipper a b -> Maybe (Zipper a b)
+-- | Apply a motion each time the focus matches the predicate, raising an error
+-- in @m@ otherwise
+moveWhile :: (Failure (ThrownBy mot) m, Motion mot, Typeable c) =>
+              (c -> Bool) -> mot c c -> Zipper a c -> m (Zipper a c)
 moveWhile p m z | p $ viewf z = move m z >>= moveWhile p m
                 | otherwise   = return z
 
--- | Apply a motion until the predicate matches or the motion fails, returning
--- Nothing if a 'move' fails before we reach a focus that matches the predicate.
-moveUntil :: (Motion m,Typeable a, Typeable b)=> 
-                 (b -> Bool) -> m b b -> Zipper a b -> Maybe (Zipper a b)
+-- | Apply a motion until the predicate matches or the motion fails, raising an
+-- error in @m@ if a 'move' fails before we reach a focus that matches the
+-- predicate.
+moveUntil :: (Failure (ThrownBy mot) m, Motion mot, Typeable c) =>
+              (c -> Bool) -> mot c c -> Zipper a c -> m (Zipper a c)
 moveUntil p m z = move m z >>= maybeLoop
     where maybeLoop z' | p $ viewf z' = return z'
                        | otherwise    = moveUntil p m z'
@@ -431,10 +441,10 @@ zipper = Z Nil
 -- | re-assembles the data structure from the top level, returning @Nothing@ if
 -- the structure cannot be re-assembled.
 --
--- /Note/: For standard lenses produced with 'mkLabels' this will never fail. 
--- However setters can be used to enforce arbitrary constraints on a data 
--- structure, e.g. that a type @Odd Int@ can only hold an odd integer. This
--- function returns @Nothing@ in such cases.
+-- /Note/: For standard lenses produced with 'mkLabels' this will never fail.
+-- However setters defined by hand with 'lens' can be used to enforce arbitrary
+-- constraints on a data structure, e.g. that a type @Odd Int@ can only hold an
+-- odd integer.  This function returns @Nothing@ in such cases.
 close :: Zipper a b -> Maybe a
 close = snd . closeSaving
 
@@ -448,19 +458,18 @@ close = snd . closeSaving
 data ZipperLenses a c b = ZL { zlStack :: ZipperStack b a,
                                zLenses :: Thrist TypeableLens b c }
 
-
--- INTERNAL:
-saveFromAbove :: (Typeable c, Typeable b) => 
-                    Up c b -> Zipper a c -> Maybe (To b c)
-saveFromAbove n = fmap (S . zLenses) . mvUpSavingL (upLevel n) . flip ZL Nil . stack
-    where
-        mvUpSavingL :: (Typeable b', Typeable b)=> 
-                        Int -> ZipperLenses a c b -> Maybe (ZipperLenses a c b')
-        mvUpSavingL 0 z = gcast z
-        mvUpSavingL n' (ZL (Cons (H l _) stck) ls) = 
-                          mvUpSavingL (n'-1) (ZL stck $ Cons (TL l) ls)
-        mvUpSavingL _ _ = Nothing
-
+-- INTERNAL FOR NOW:
+saveFromAbove :: (Typeable c, Typeable b, Failure UpErrors m) => 
+                    Up c b -> Zipper a c -> m (To b c)
+saveFromAbove n = liftM (S . zLenses) . mvUpSavingL (upLevel n) . flip ZL Nil . stack
+    where mvUpSavingL :: (Typeable b', Typeable b, Failure UpErrors m)=> 
+                          Int -> ZipperLenses a c b -> m (ZipperLenses a c b')
+          mvUpSavingL 0 z = 
+              maybeThrow CastFailed $ gcast z
+          mvUpSavingL n' (ZL (Cons (H l _) stck) ls) = 
+              mvUpSavingL (n'-1) (ZL stck $ Cons (TL l) ls)
+          mvUpSavingL _ _ = failure AlreadyAtTop
+        
 
 
 -- | Close the zipper, returning the saved path back down to the zipper\'s
@@ -480,8 +489,8 @@ save :: Zipper a b -> To a b
 save = fst . closeSaving
 
 -- | Extract a composed lens that points to the location we saved. This lets 
--- us modify, set or get a location that we visited with our 'Zipper' after 
--- closing the Zipper.
+-- us modify, set or get a location that we visited with our 'Zipper', after 
+-- closing the Zipper, using "fclabels" @get@ and @set@.
 flatten :: (Typeable a, Typeable b)=> To a b -> (a M.:~> b)
 flatten = compStack . mapThrist tLens . savedLenses
 
@@ -494,7 +503,7 @@ flatten = compStack . mapThrist tLens . savedLenses
 -- structure has changed.
 --
 -- > restore s = move s . zipper
-restore :: (Typeable a, Typeable b)=> To a b -> a -> Maybe (Zipper a b)
+restore :: (Typeable a, Typeable b, Failure ToErrors m)=> To a b -> a -> m (Zipper a b)
 restore s = move s . zipper
 
 
@@ -564,7 +573,7 @@ type Zipper1 a = Zipper a a
     -- HELPERS
     ------------
 
- -- The core of our 'move' function
+ -- The core of move To
 pivot (Z t a) (TL l) = Z (Cons h t) <$> mb
     where h = H l (Kleisli c)
           c = flip (M.set l) a 
@@ -597,13 +606,14 @@ lengthThrist = getInt . foldrThrist plusB (IntB 0) . mapThrist (const $ IntB 1)
 
 
 maybeThrow :: (Failure e m)=> e -> Maybe a -> m a
-maybeThrow e = maybe (Failure e) return
+maybeThrow e = maybe (failure e) return
 
 
     ----------------------
     -- EXCEPTION HIERARCHY
     ----------------------
 
+{-
 -- NOTE: a 'Throws' hierarchy must be defined manually for c-m-e. Perhaps we
 -- should create a separate package with those instances defined
 
@@ -623,5 +633,8 @@ data DownException
 
 -- PER-MOTION EXCEPTIONS:
 instance Exception UpErrors where
-instance Exception UpCastingErrors where
 instance Exception ...
+-}
+-- TODO: MAKE INSTANCES INTO PROPER HIERARCHY ABOVE
+instance Exception UpErrors
+instance Exception ToErrors
