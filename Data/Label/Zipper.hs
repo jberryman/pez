@@ -125,7 +125,6 @@ module Data.Label.Zipper (
     , (M.:~>)
     , Control.Failure.Failure(..)
     , Control.Exception.Exception(..)
-    --, module Data.Label
 ) where
 
 
@@ -141,15 +140,12 @@ module Data.Label.Zipper (
  -
  -
  -   TODO NOTES
- -   - decide on minimal exports from Category and fclabels
- -      - mkLabels, Typeable (for Zipper-ifying types)
- -      - Failure(..), Exception(..)  (for handling exceptions)
- -      - (:~>) for generated lens sigs
- -      - INSPECT: - how does this play with users importing libs that use above? Any ambiguous errors?
- -                 - how does the type sig for 'to' look since we do a qualified import?
  -   - update tests
  -      - move (Up 0) == id
  -      - ..
+ -      - Re-exports, INSPECT: 
+-                 - how does this play with users importing libs that use above? Any ambiguous errors?
+-                 - how does the type sig for 'to' look since we do a qualified import?
  -   - clean up documentation
  -   - release 0.1.0
  -
