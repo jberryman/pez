@@ -1,7 +1,8 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, TypeOperators, TemplateHaskell,
 GADTs, DeriveDataTypeable, TupleSections,
 MultiParamTypeClasses, 
-TypeFamilies, FlexibleContexts #-}
+TypeFamilies, FlexibleContexts,
+ExistentialQuantification #-}
 
 {- |
 PEZ is a generic zipper library. It uses lenses from the "fclabels" package to
@@ -64,8 +65,9 @@ module Data.Label.Zipper (
     {- |
        /A note on failure in zipper operations:/
 
-       Most operations on a 'Zipper' return a result of the Maybe type, for 
-       various types of failures. Here is a list of failure scenarios:
+       Most operations on a 'Zipper' return a result in a 'Failure' class
+       monad, throwing various types of failures. Here is a list of failure
+       scenarios:
 
          - a 'move' Up arrives at a type that could not be cast to the type
            expected
@@ -83,7 +85,6 @@ module Data.Label.Zipper (
 
          - a 'close' cannot re-build the structure because some setter failed,
            as above. Again, this does not occur for TH'generated lenses.
-
     -}
     -- ** Creating and closing Zippers
     , zipper , close
@@ -91,6 +92,13 @@ module Data.Label.Zipper (
     , Motion(..) 
     , Up(..) , UpCasting(..) , To() , to 
     --, Flatten(..)
+    -- *** Error types
+    {- |
+       Every defined 'Motion' has an associated error type, thrown in a
+       'Failure' class monad (see "failure"). These types are also have a small
+       'Exception' hierarchy.
+    -}
+    , ZipperException() , UpErrors(..) , ToErrors(..)
     -- *** Repeating movements
     , moveWhile
     , moveUntil
@@ -127,8 +135,6 @@ module Data.Label.Zipper (
  -
  -
  -   TODO NOTES
- -   - define an exception type for each motion
- -   - define hierarchy of Exceptions of these types
  -   - decide on minimal exports from Category and fclabels
  -      - ...
  -   - update tests
@@ -613,28 +619,26 @@ maybeThrow e = maybe (failure e) return
     -- EXCEPTION HIERARCHY
     ----------------------
 
-{-
 -- NOTE: a 'Throws' hierarchy must be defined manually for c-m-e. Perhaps we
 -- should create a separate package with those instances defined
 
---ROOT:
-data MoveException = forall e . Exception e => MoveException e
-     deriving (Typeable
+-- | The root of the exception hierarchy for Zipper 'move' operations:
+data ZipperException = forall e . Exception e => ZipperException e
+     deriving (Typeable)
 
-instance Show MoveException where
-    show (MoveException e) = show e
+instance Show ZipperException where
+    show (ZipperException e) = show e
 
-instance Exception MoveException
+instance Exception ZipperException
 
--- CHILDREN:
-data UpException
-
-data DownException
-
--- PER-MOTION EXCEPTIONS:
 instance Exception UpErrors where
-instance Exception ...
--}
--- TODO: MAKE INSTANCES INTO PROPER HIERARCHY ABOVE
-instance Exception UpErrors
-instance Exception ToErrors
+    toException = toException . ZipperException
+    fromException x = do
+        ZipperException a <- fromException x
+        cast a
+
+instance Exception ToErrors where
+    toException = toException . ZipperException
+    fromException x = do
+        ZipperException a <- fromException x
+        cast a
