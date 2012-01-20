@@ -36,7 +36,7 @@ module Data.Label.Zipper (
      >   | Nil  
      >   deriving (Typeable,Show)
      >
-     > $(mkLabelsNoTypes [''Tree])
+     > $(mkLabels [''Tree])
       
      Now we can go crazy using Tree in a 'Zipper':
       
@@ -85,6 +85,8 @@ module Data.Label.Zipper (
 
          - a 'close' cannot re-build the structure because some setter failed,
            as above. Again, this does not occur for TH'generated lenses.
+
+       See the "failure" package for details.
     -}
     -- ** Creating and closing Zippers
     , zipper , close
@@ -117,9 +119,13 @@ module Data.Label.Zipper (
     -- * Convenience operators, types, and exports
     , Zipper1
 
-    -- ** Export Typeable class and "fclabels" package
+    -- ** Re-exports
+    , Data.Typeable.Typeable(..)
+    , Data.Label.mkLabels
+    , (M.:~>)
+    , Control.Failure.Failure(..)
+    , Control.Exception.Exception(..)
     --, module Data.Label
-    --, Data.Typeable.Typeable     
 ) where
 
 
@@ -136,7 +142,11 @@ module Data.Label.Zipper (
  -
  -   TODO NOTES
  -   - decide on minimal exports from Category and fclabels
- -      - ...
+ -      - mkLabels, Typeable (for Zipper-ifying types)
+ -      - Failure(..), Exception(..)  (for handling exceptions)
+ -      - (:~>) for generated lens sigs
+ -      - INSPECT: - how does this play with users importing libs that use above? Any ambiguous errors?
+ -                 - how does the type sig for 'to' look since we do a qualified import?
  -   - update tests
  -      - move (Up 0) == id
  -      - ..
