@@ -3,8 +3,8 @@ module Main
     where
 
 import Test.QuickCheck
-import Data.Typeable.Zipper
-import Data.Record.Label.Prelude
+import Data.Label.Zipper
+import PreludeLenses
 
 {-
  - These tests are vital, since with all the dynamic magic we're using, a
