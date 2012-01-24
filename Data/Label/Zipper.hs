@@ -418,9 +418,9 @@ instance Motion Flatten where
 
 -- TODO: or call this moveFloor?
 
--- | Apply the given Motion to a zipper until the Motion fails. For instance
--- @repeatMove (to left) z@ might return the left-most node of a 'zipper'ed tree
--- @z@.
+-- | Apply the given Motion to a zipper until the Motion fails, returning the
+-- last location visited. For instance @repeatMove (to left) z@ might return
+-- the left-most node of a 'zipper'ed tree @z@.
 -- 
 -- > repeatMove m z = maybe z (repeatMove m) $ move m z
 repeatMove :: (Motion m,Typeable a, Typeable b)=> 
@@ -434,9 +434,9 @@ moveWhile :: (Failure (ThrownBy mot) m, Motion mot, Typeable c) =>
 moveWhile p m z | p $ viewf z = move m z >>= moveWhile p m
                 | otherwise   = return z
 
--- | Apply a motion until the predicate matches or the motion fails, raising an
--- error in @m@ if a 'move' fails before we reach a focus that matches the
--- predicate.
+-- | Apply a motion one or more times until the predicate applied to the focus
+-- returns @True@, otherwise raising an error in @m@ if a 'move' fails before
+-- we reach a focus that matches.
 moveUntil :: (Failure (ThrownBy mot) m, Motion mot, Typeable c) =>
               (c -> Bool) -> mot c c -> Zipper a c -> m (Zipper a c)
 moveUntil p m z = move m z >>= maybeLoop
