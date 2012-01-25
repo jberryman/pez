@@ -434,6 +434,9 @@ moveWhile :: (Failure (ThrownBy mot) m, Motion mot, Typeable c) =>
 moveWhile p m z | p $ viewf z = move m z >>= moveWhile p m
                 | otherwise   = return z
 
+{-
+-- THIS SEEMS NOT TERRIBLY USEFUL, AND WAS CONFUSING EVEN ME
+--
 -- | Apply a motion one or more times until the predicate applied to the focus
 -- returns @True@, otherwise raising an error in @m@ if a 'move' fails before
 -- we reach a focus that matches.
@@ -442,7 +445,20 @@ moveUntil :: (Failure (ThrownBy mot) m, Motion mot, Typeable c) =>
 moveUntil p m z = move m z >>= maybeLoop
     where maybeLoop z' | p $ viewf z' = return z'
                        | otherwise    = moveUntil p m z'
+-}
 
+
+-- | Apply a motion zero or more times until the focus matches the predicate
+--
+-- > moveUntil p = moveWhile (not . p)
+moveUntil :: (Failure (ThrownBy mot) m, Motion mot, Typeable c) =>
+              (c -> Bool) -> mot c c -> Zipper a c -> m (Zipper a c)
+moveUntil p = moveWhile (not . p)
+
+
+-- TODO: consider:
+--     moveWhen
+--     moveUnless
 
 --------------- 
 
