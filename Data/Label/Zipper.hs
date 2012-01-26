@@ -284,8 +284,8 @@ newtype Up c b = Up { upLevel :: Int }
     deriving (Show,Num,Integral,Eq,Ord,Bounded,Enum,Real)
 
 data UpErrors = CastFailed
-              | AlreadyAtTop
               | LensSetterFailed
+              | MovePastTop
               deriving (Show,Typeable,Eq)
 
 
@@ -326,7 +326,7 @@ instance Motion Up where
         maybeThrow LensSetterFailed (runKleisli k c) >>= 
         move (Up (n-1)) . Z stck
     move _ _ = 
-        failure AlreadyAtTop
+        failure MovePastTop
 
     -- TODO: it makes more sense to define 'move' and 'saveFromAbove' in terms
     -- of moveSaving below, but we ran into some type weirdness, so...
@@ -344,7 +344,7 @@ instance Motion UpCasting where
     type Returning UpCasting = To
 
     moveSaving p z = do 
-        when (atTop z) $ failure AlreadyAtTop
+        when (atTop z) $ failure MovePastTop
         firstSuccess $ map (flip ms z) [Up 1 ..]
         where ms = moveSaving :: (Typeable b, Typeable c)=>Up c b -> Zipper a c -> Either UpErrors (To b c, Zipper a b)
               firstSuccess []                            = failure CastFailed
@@ -466,16 +466,6 @@ moveUntil p = moveWhile (not . p)
 zipper :: a -> Zipper a a
 zipper = Z Nil
 
--- | re-assembles the data structure from the top level, returning @Nothing@ if
--- the structure cannot be re-assembled.
---
--- /Note/: For standard lenses produced with 'mkLabels' this will never fail.
--- However setters defined by hand with 'lens' can be used to enforce arbitrary
--- constraints on a data structure, e.g. that a type @Odd Int@ can only hold an
--- odd integer.  This function returns @Nothing@ in such cases.
-close :: Zipper a b -> Maybe a
-close = snd . closeSaving
-
 
 
     ------------------------------
@@ -496,9 +486,8 @@ saveFromAbove n = liftM (S . zLenses) . mvUpSavingL (upLevel n) . flip ZL Nil . 
               maybeThrow CastFailed $ gcast z
           mvUpSavingL n' (ZL (Cons (H l _) stck) ls) = 
               mvUpSavingL (n'-1) (ZL stck $ Cons (TL l) ls)
-          mvUpSavingL _ _ = failure AlreadyAtTop
+          mvUpSavingL _ _ = failure MovePastTop
         
-
 
 -- | Close the zipper, returning the saved path back down to the zipper\'s
 -- focus. See 'close'
@@ -509,12 +498,28 @@ closeSaving (Z stck b) = (S ls, ma)
           ma = runKleisli kCont b
 
 
+-- | re-assembles the data structure from the top level, returning @Nothing@ if
+-- the structure cannot be re-assembled.
+--
+-- /Note/: For standard lenses produced with 'mkLabels' this will never fail.
+-- However setters defined by hand with 'lens' can be used to enforce arbitrary
+-- constraints on a data structure, e.g. that a type @Odd Int@ can only hold an
+-- odd integer.  This function returns @Nothing@ in such cases, which
+-- corresponds to the @LensSetterFailed@ constructor of 'UpErrors'
+close :: Zipper a b -> Maybe a
+close = snd . closeSaving
+
+
+
 -- | Return a path 'To' the current location in the 'Zipper'.
 -- This lets you return to a location in your data type with 'restore'.
 --
 -- > save = fst . closeSaving
 save :: Zipper a b -> To a b
 save = fst . closeSaving
+
+
+-- TODO: consider making flatten polymorphic over: To, Zipper, etc. and change name to toLens
 
 -- | Extract a composed lens that points to the location we saved. This lets 
 -- us modify, set or get a location that we visited with our 'Zipper', after 
