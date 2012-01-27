@@ -25,10 +25,10 @@ module Data.Label.Zipper (
      > module Main where
      >
      > import Data.Label.Zipper
-      
+
      Create a datatype, deriving an instance of the Typeable class, and generate a
      lens using functions from "fclabels":
-      
+
      > data Tree a = Node { 
      >     _leftNode :: Tree a
      >   , _val      :: a 
@@ -37,18 +37,17 @@ module Data.Label.Zipper (
      >   deriving (Typeable,Show)
      >
      > $(mkLabels [''Tree])
-      
+
      Now we can go crazy using Tree in a 'Zipper':
-      
+
      > treeBCD = Node (Node Nil 'b' Nil) 'c' (Node Nil 'd' Nil)
      > 
-     > descendLeft :: Zipper1 (Tree a) -> Zipper1 (Tree a)
-     > descendLeft z = case (viewf z) of
-     >                      Nil -> z
-     >                      _   -> descendLeft $ move leftNode z
+     > descendLeft :: (Typeable a)=> Zipper1 (Tree a) -> Zipper1 (Tree a)
+     > descendLeft = moveFloor (to leftNode) -- stops at Nil constructor
      >
-     > insertLeftmost :: a -> Tree a -> Tree a
-     > insertLeftmost x = close . setL focus x . descendLeft . zipper
+     > insertLeftmost :: (Typeable a)=> a -> Tree a -> Maybe (Tree a)
+     > insertLeftmost a = close . setf newNode . descendLeft . zipper
+     >     where newNode = Node Nil a Nil
      >
      > treeABCD = insertLeftmost 'a' treeBCD
       
@@ -58,6 +57,9 @@ module Data.Label.Zipper (
       
      > stringRep :: (Show b, Read b) => b :-> String
      > stringRep = lens show (const . read)
+
+     Another exciting possibility are zippers that can perform validation,
+     refusing to 'close' if a field is rejected.
     -}
 
     -- * Zipper functionality
@@ -148,6 +150,8 @@ module Data.Label.Zipper (
  -   - NEXT TODO
  -   ------------
  -   - complete code coverage
+ -   - make error types return more useful info: height above where constructor
+ -     failed, typeRep of the failure,
  -   - implement focusValid, or a better solution.
  -   - can we define appropriate instances to allow, e.g. `move -2` ?
  -   - pure move functionality (either separate module/namespace or new
