@@ -19,15 +19,15 @@ module Data.Label.Zipper (
     -- * Usage
     {- |
      First import the library, which brings in the Typeable and "fclabels" modules.
-     You will also want to enable a few extensions:
+     You will also want to enable a few extensions:  
+         @TemplateHaskell@, @DeriveDataTypeable@, @TypeOperators@
       
-     > -- {-# LANGUAGE TemplateHaskell, DeriveDataTypeable, TypeOperators #-}
      > module Main where
      >
      > import Data.Label.Zipper
 
      Create a datatype, deriving an instance of the Typeable class, and generate a
-     lens using functions from "fclabels":
+     lens using Template Haskell functionality from "fclabels":
 
      > data Tree a = Node { 
      >     _leftNode :: Tree a
@@ -99,8 +99,8 @@ module Data.Label.Zipper (
     -- *** Error types
     {- |
        Every defined 'Motion' has an associated error type, thrown in a
-       'Failure' class monad (see "failure"). These types are also have a small
-       'Exception' hierarchy.
+       'Failure' class monad (see "failure"). These types are also part of a
+       small 'Exception' hierarchy.
     -}
     , ZipperException() , UpErrors(..) , ToErrors(..)
     -- *** Repeating movements
@@ -124,6 +124,9 @@ module Data.Label.Zipper (
     , Zipper1
 
     -- ** Re-exports
+    {- | These re-exported functions should be sufficient for the most common
+     - zipper functionality
+     -}
     , Data.Typeable.Typeable(..)
     , Data.Label.mkLabels
     , (M.:~>)
@@ -298,7 +301,11 @@ class (Exception (ThrownBy mot))=> Motion mot where
 
 -- | a 'Motion' upwards in the data type. e.g. @move (Up 2)@ would move up to
 -- the grandparent level, as long as the type of the focus after moving is 
--- @b@. This 'Motion' type throws 'UpErrors'
+-- @b@. Inline type signatures are often helpful to avoid ambiguity, e.g. 
+-- @(Up 2 :: Up Char (Tree Char))@ read as \"up two levels, from a focus of
+-- type @Char@ to @Tree Char@\".
+--
+-- This 'Motion' type throws 'UpErrors'
 newtype Up c b = Up { upLevel :: Int }
     deriving (Show,Num,Integral,Eq,Ord,Bounded,Enum,Real)
 
@@ -362,7 +369,7 @@ instance Motion UpCasting where
     type ThrownBy UpCasting = UpErrors
     type Returning UpCasting = To
 
-    moveSaving p z = do 
+    moveSaving _ z = do 
         when (atTop z) $ failure MovePastTop
         firstSuccess $ map (flip ms z) [Up 1 ..]
         where ms = moveSaving :: (Typeable b, Typeable c)=>Up c b -> Zipper a c -> Either UpErrors (To b c, Zipper a b)

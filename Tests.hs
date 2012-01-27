@@ -176,3 +176,7 @@ prop_simple_moveUp_past_top l = check $
 
 prop_move_Up_0_is_id :: [Char] -> Bool
 prop_move_Up_0_is_id s = maybe False (== s) $ move (Up 0 :: Up String String) (zipper s) >>= close
+
+
+-- test move (UpCasting success and failure)
+--
