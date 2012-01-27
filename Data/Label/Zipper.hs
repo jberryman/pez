@@ -104,7 +104,7 @@ module Data.Label.Zipper (
     -- *** Repeating movements
     , moveWhile
     , moveUntil
-    , repeatMove
+    , moveFloor
     -- ** The zipper focus
     -- | a "fclabels" lens for setting, getting, and modifying the zipper's
     -- focus. Note: a zipper may fail to 'close' if the lens used to reach the
@@ -431,16 +431,14 @@ instance Motion Flatten where
 
 --------------- REPEATED MOTIONS -----------------
 
--- TODO: or call this moveFloor?
-
 -- | Apply the given Motion to a zipper until the Motion fails, returning the
--- last location visited. For instance @repeatMove (to left) z@ might return
+-- last location visited. For instance @moveFloor (to left) z@ might return
 -- the left-most node of a 'zipper'ed tree @z@.
 -- 
--- > repeatMove m z = maybe z (repeatMove m) $ move m z
-repeatMove :: (Motion m,Typeable a, Typeable b)=> 
+-- > moveFloor m z = maybe z (moveFloor m) $ move m z
+moveFloor :: (Motion m,Typeable a, Typeable b)=> 
                  m b b -> Zipper a b -> Zipper a b
-repeatMove m z = maybe z (repeatMove m) (move m z)
+moveFloor m z = maybe z (moveFloor m) (move m z)
 
 -- | Apply a motion each time the focus matches the predicate, raising an error
 -- in @m@ otherwise

@@ -111,9 +111,9 @@ prop_builtin_recursive_movement i =
         z = zipper l
         
         mz'1 = moveUntil null (to lTail) z
-        z'2 = repeatMove (to lTail) z
+        z'2 = moveFloor (to lTail) z
         -- test that both have level equal to length of list:
-        testLength z1 z2 | level z1 /= i' = P.failed{P.reason = "repeatMove broken" }
+        testLength z1 z2 | level z1 /= i' = P.failed{P.reason = "moveFloor broken" }
                          | level z2 /= i' = P.failed{P.reason = "moveUntil broken" }
                          | otherwise = P.succeeded
 

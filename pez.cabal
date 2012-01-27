@@ -16,7 +16,6 @@ Description:         PEZ is a generic zipper library. It uses lenses from the "f
                      Changes 0.0.4 -> 0.1.0:
                      .
                      >  - use fclabels 1.0
-                     >  - zipper operations in Maybe by default
                      >  - module renamed Data.Label.Zipper
                      >  - 'ZPath' renamed 'Motion', define new Up type and instance
                      >  - fclabels lenses now require wrapping with 'to'
@@ -25,6 +24,7 @@ Description:         PEZ is a generic zipper library. It uses lenses from the "f
                      >  - SavedPath renamed To
                      >  - removed experimental operators
                      >  - using failure package for exceptions
+                     >  - etc., etc.
                      .
  
 
@@ -43,7 +43,8 @@ Build-type:          Simple
 
 -- Extra files to be distributed with the package, such as examples or
 -- a README.
-Extra-source-files:  EXAMPLES/Examples.lhs, PreludeLenses.hs
+--Extra-source-files:  EXAMPLES/Examples.lhs, PreludeLenses.hs
+Extra-source-files:  PreludeLenses.hs
 
 -- Constraint on the version of Cabal needed to build this package.
 Cabal-version:       >=1.2.3
