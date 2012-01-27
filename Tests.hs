@@ -9,6 +9,7 @@ import Test.Framework.Providers.QuickCheck2
 import Data.Label.Zipper
 import PreludeLenses
 import Data.Label.Maybe(get)
+import Data.Label(mkLabels) -- redundant, checking that no ambiguity error
 
 import qualified Control.Category as C
 
@@ -67,6 +68,7 @@ tests =
    , testProperty "various save restore functionality, with a more complex type" prop_mutual_saving
    , testProperty "test successfully-performed move up" prop_moveUpSaving
    , testProperty "moving up past top throws error" prop_simple_moveUp_past_top
+   , testProperty "moving up 0 to correct type succeeds and is id" prop_move_Up_0_is_id
    ]
         
 
@@ -171,3 +173,6 @@ prop_simple_moveUp_past_top l = check $
     move (Up 2 :: Up [Int] [Int] {- MovePastTop -})
    
     where check = maybe True (const False)
+
+prop_move_Up_0_is_id :: [Char] -> Bool
+prop_move_Up_0_is_id s = maybe False (== s) $ move (Up 0 :: Up String String) (zipper s) >>= close
