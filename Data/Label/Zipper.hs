@@ -106,7 +106,9 @@ module Data.Label.Zipper (
     , moveUntil
     , repeatMove
     -- ** The zipper focus
-    -- | a "fclabels" lens for setting, getting, and modifying the zipper's focus:
+    -- | a "fclabels" lens for setting, getting, and modifying the zipper's
+    -- focus. Note: a zipper may fail to 'close' if the lens used to reach the
+    -- current focus performed some validation.
     , focus 
     , viewf , setf , modf
     -- ** Querying Zippers and Motions
@@ -134,27 +136,40 @@ module Data.Label.Zipper (
  -
  -   we use a Thrist to create a type-threaded stack of continuations
  -   allowing us to have a polymorphic history of where we've been.
- -   by using Typeable, we are able to "move up" by type casting in
+ -   By using Typeable, we are able to "move up" by type casting in
  -   the Maybe monad. This means that the programmer has to know
  -   what type a move up will produce, or deal with unknowns.
  -
  -
  -   TODO NOTES
- -   - update tests
- -      - move (Up 0) == id
- -      - ..
- -      - Re-exports, INSPECT: 
--                 - how does this play with users importing libs that use above? Any ambiguous errors?
--                 - how does the type sig for 'to' look since we do a qualified import?
- -   - clean up documentation
+ -   - clean up documentation, code samples
  -   - release 0.1.0
  -
  -   - NEXT TODO
  -   ------------
+ -   - complete code coverage
+ -   - implement focusValid, or a better solution.
  -   - can we define appropriate instances to allow, e.g. `move -2` ?
  -   - pure move functionality (either separate module/namespace or new
  -      function)
  -      - pureMove :: (PureMotion m)=>
+ -   - re. above: also see note under CONVENIENCE: can we use a mechanism
+ -      similar to what fclabels uses on generated zippers to force the use of
+ -      e.g. focusSafe on a zipper where we have used 'To' with a failable lens,
+ -      forcing a close function that would return Maybe, etc.
+ -
+ -      We should provide a function validate :: FallibleZipper -> ClosableZipper, which allows validation at any one time
+ -      Then, moveFallible :: z -> FallibleZipper, move :: z -> z
+ -
+ -      But there is a real question with fclabels that has come up:
+ -          1) basic lenses that can fail only ever fail (because of multiple
+    -          constructors) on the getter, yet underlying type can fail in setter
+ -             too. This adds needless fallability to our close function
+ -          2) we might like (as we want in focusValid below) to have a lens
+    -          that ONLY fails on a setter (does validation), but which always
+ -             succeeds in a getter (has a single constructor for instance)
+ -      
+ -
  -   - conversion from motions to fclabels (:~>)
  -   - add Flatten motion down that collapses history?
  -      - doesn't make sense for motion from top level. return Nothing?
@@ -498,6 +513,20 @@ closeSaving (Z stck b) = (S ls, ma)
           ma = runKleisli kCont b
 
 
+-- TODO: consider that if we stick with fclabels-generated lenses here, there
+-- isn't any conceptual reason why such lenses whould have to fail on their
+-- setters, and why 'close' should have to fail here:
+-- I guess this would require an implementation of M.lens like:
+--
+--     lens :: (f -> Maybe a) -> (f -> Maybe (a -> f)) -> f :~> a
+-- e.g. lLeft = lens lGet lSet where
+--           lGet (Left a) = Just a
+--           lGet _ = Nothing
+--           lSet (Left a) = Just (\a'-> Left a') -- if the type had multiple params they would be preserved of course
+--           lSet _ = Nothing
+--
+--        ...so is (Just $\a-> Left a) an arrow at this point? 
+
 -- | re-assembles the data structure from the top level, returning @Nothing@ if
 -- the structure cannot be re-assembled.
 --
@@ -576,6 +605,14 @@ instance LevelDelta Flatten where
     ----------------
     -- CONVENIENCE
     ----------------
+
+-- TODO: we should at least export a lens 'focusM' or 'focusSafe'that fails
+-- when the zipper fails validation (i.e. can't be closed) . There are probably
+-- some clever polymorphic solutions similar to what fclabels itself does to
+-- force use of focusSafe when we've moved with a failable lens, vs. a zipper
+-- untainted by failable lenses in history (in which case 'close' will never
+-- fail).
+
 
 -- | a view function for a Zipper\'s 'focus'.
 --
