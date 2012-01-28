@@ -61,6 +61,7 @@ data Tree a = Branch (Tree a) (Tree a)
  -- Don't know the appropriate way to run batch job:
 main = defaultMain tests
 
+
 tests = 
    [ testProperty "simple zipper creation" prop_simple_creation
    , testProperty "recursive descent/ascent" prop_simple_recursive_movement
@@ -69,6 +70,7 @@ tests =
    , testProperty "test successfully-performed move up" prop_moveUpSaving
    , testProperty "moving up past top throws error" prop_simple_moveUp_past_top
    , testProperty "moving up 0 to correct type succeeds and is id" prop_move_Up_0_is_id
+   , testProperty "move UpCasting works" prop_move_UpCasting
    ]
         
 
@@ -179,4 +181,11 @@ prop_move_Up_0_is_id s = maybe False (== s) $ move (Up 0 :: Up String String) (z
 
 
 -- test move (UpCasting success and failure)
---
+prop_move_UpCasting :: ((),((),(Int,Int))) -> Bool
+prop_move_UpCasting tup = maybe False id $ 
+   return (zipper tup) >>=
+   move (to lSnd) >>= \zCheck ->       -- ((),(Int,Int))
+   move (to lSnd) zCheck >>=
+   move (UpCasting :: UpCasting (Int,Int) ((),(Int,Int)) ) >>=
+   \z-> if (viewf z == viewf zCheck) then return True else return False
+    
