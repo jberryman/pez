@@ -189,3 +189,7 @@ prop_move_UpCasting tup = maybe False id $
    move (UpCasting :: UpCasting (Int,Int) ((),(Int,Int)) ) >>=
    \z-> if (viewf z == viewf zCheck) then return True else return False
     
+-- NOT YET COVERED:
+--moveSaving To
+--level (move m z) == level z + delta m
+--exception hierarchy

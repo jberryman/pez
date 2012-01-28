@@ -53,7 +53,9 @@ Test-Suite zipper-tests
     Type:                 exitcode-stdio-1.0
     Main-is:              Tests.hs
     Build-depends:        base, QuickCheck, test-framework, test-framework-quickcheck2
-    GHC-Options:      -fhpc -hpcdir dist/test/
+    GHC-Options:          -fhpc -hpcdir dist/test/ -fforce-recomp
+    -- then run:
+    --     $ hpc markup --hpcdir=dist/test/ --destdir=dist/hpc/ zipper-tests.tix
 
 
 Library
