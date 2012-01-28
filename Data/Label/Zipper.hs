@@ -146,12 +146,8 @@ module Data.Label.Zipper (
  -   what type a move up will produce, or deal with unknowns.
  -
  -
- -   TODO NOTES
- -   - clean up documentation, code samples
- -   - release 0.1.0
- -
- -   - NEXT TODO
- -   ------------
+ -   TODO NEXT:
+ -   ----------
  -   - complete code coverage
  -   - make error types return more useful info: height above where constructor
  -     failed, typeRep of the failure,
@@ -653,6 +649,7 @@ type Zipper1 a = Zipper a a
     ------------
 
  -- The core of move To
+pivot :: forall t t1 t2. Zipper t t1 -> TypeableLens t1 t2 -> Maybe (Zipper t t2)
 pivot (Z t a) (TL l) = Z (Cons h t) <$> mb
     where h = H l (Kleisli c)
           c = flip (M.set l) a 
@@ -672,6 +669,10 @@ getReverseLensStack :: ZipperStack b a -> Thrist TypeableLens a b
 getReverseLensStack = unflip . foldlThrist revLocal (Flipped Nil)
 -- MAKING THIS GLOBAL SHOULD PLEASE GHC 7.0 WITHOUT EXTRA EXTENSIONS. SEE:
 --      http://hackage.haskell.org/trac/ghc/blog/LetGeneralisationInGhc7
+revLocal :: forall t t1 t2.
+               Flipped (Thrist TypeableLens) t t1
+               -> HistPair t1 t2
+               -> Flipped (Thrist TypeableLens) t t2
 revLocal (Flipped t) (H l _) = Flipped $ Cons (TL l) t
 
 
