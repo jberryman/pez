@@ -1,7 +1,7 @@
 Name:                pez
 Version:             0.1.0
 Synopsis:            A Pretty Extraordinary Zipper library
-Homepage:            http://coder.bsimmons.name/blog/2011/04/pez-zipper-library-released/
+Homepage:            http://brandon.si/code/pez-zipper-library-released/
 
 Description:         PEZ is a generic zipper library. It uses lenses from the "fclabels" package to
                      reference a \"location\" to move to in the zipper. The zipper is restricted to
@@ -47,13 +47,19 @@ Build-type:          Simple
 Extra-source-files:  PreludeLenses.hs
 
 -- Constraint on the version of Cabal needed to build this package.
-Cabal-version:       >=1.2.3
+Cabal-version:       >=1.8
+
+source-repository head   
+    type:     git
+    location: https://github.com/jberryman/pez.git
+    branch:   master
+
 
 Test-Suite zipper-tests
     Type:                 exitcode-stdio-1.0
     Main-is:              Tests.hs
     Build-depends:        base, QuickCheck, test-framework, test-framework-quickcheck2
-    GHC-Options:          -fhpc -hpcdir dist/test/ -fforce-recomp
+    --GHC-Options:          -fhpc -hpcdir dist/test/ -fforce-recomp
     -- then run:
     --     $ hpc markup --hpcdir=dist/test/ --destdir=dist/hpc/ zipper-tests.tix
 
